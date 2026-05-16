@@ -68,6 +68,10 @@ ISSUES_JSON:["争点1","争点2"]`,
     // 会話フェーズ判定
     const phase = humanCount <= 4 ? "序盤" : humanCount <= 8 ? "中盤" : "終盤";
 
+    // 発言回数集計
+    const userCount = humanMessages.filter((m: any) => m.role === "user").length;
+    const partnerCount = humanMessages.filter((m: any) => m.role === "partner").length;
+
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
@@ -77,6 +81,7 @@ ISSUES_JSON:["争点1","争点2"]`,
 以下の会話を注意深く読み、カウンセラーとして介入してください。
 
 【現在のフェーズ】${phase}
+【発言回数】あなた：${userCount}回 / パートナー：${partnerCount}回
 【直前のAIコメント】「${lastAIComment}」← これと同じ内容・表現を絶対に繰り返さない
 
 【絶対に守るルール】
@@ -100,10 +105,25 @@ ISSUES_JSON:["争点1","争点2"]`,
 - 会話の具体的な内容を必ず反映する
 - 30〜60文字・質問は一つだけ・自然な話し言葉
 
-【nextSpeaker】
-- 会話全体を読んで今どちらに話しかけるのが最も効果的か判断
-- 感情が強い・まだ十分に話せていない・誤解している方を優先
-- "user" または "partner"
+【nextSpeaker の判断基準（重要）】
+会話全体を通して以下を総合的に判断する：
+
+1. 発言回数のバランス
+   - あなたの発言回数 vs パートナーの発言回数を数える
+   - 少ない方に話す機会を与える
+
+2. 感情の深掘り
+   - まだ十分に気持ちを言えていない方を優先
+   - 感情が強いのに短い返答しかしていない方を優先
+
+3. 誤解・すれ違いの解消
+   - 相手の言葉を誤解している可能性がある方に確認する
+
+4. 会話の流れ
+   - AIが質問した直後にその答えを言えていない場合は同じ人を続ける
+   - 一方的に話し続けている場合は相手に切り替える
+
+"user" または "partner" を返す
 
 【出力】JSONのみ・説明不要：
 {"type":"mediate","comment":"会話内容を反映した具体的なコメント","nextSpeaker":"user"}`,
