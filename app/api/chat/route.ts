@@ -23,7 +23,6 @@ export async function POST(req: Request) {
     const messages = body.messages || [];
     const isEndSession = body.isEndSession || false;
 
-    // セッション終了
     if (isEndSession) {
       const completion = await openai.chat.completions.create({
         model: "gpt-4o-mini",
@@ -37,11 +36,7 @@ export async function POST(req: Request) {
 
 EMOTIONS_JSON:{"user":{"anger":0,"sadness":0,"anxiety":0,"understanding":0},"partner":{"anger":0,"sadness":0,"anxiety":0,"understanding":0}}
 KEYWORDS_JSON:["キーワード1","キーワード2","キーワード3"]
-ISSUES_JSON:["争点1","争点2"]
-
-- EMOTIONS: あなた(user)とパートナー(partner)を独立して0〜10で採点。
-- KEYWORDS: 会話に頻出した感情・行動・テーマを3〜5語。
-- ISSUES: 二人の間で対立・すれ違いが起きていた核心的な争点を1〜3つ。`,
+ISSUES_JSON:["争点1","争点2"]`,
           },
           ...messages.map((m: any) => ({
             role: m.role === "assistant" ? "assistant" : "user",
@@ -57,7 +52,6 @@ ISSUES_JSON:["争点1","争点2"]
       return Response.json({ reply, emotions, keywords, issues });
     }
 
-    // 通常会話
     const humanMessages = messages.filter((m: any) => m.role !== "assistant");
     const humanCount = humanMessages.length;
 
@@ -68,6 +62,12 @@ ISSUES_JSON:["争点1","争点2"]
     const lastSpeaker = humanMessages.slice(-1)[0]?.role;
     const defaultNext = lastSpeaker === "user" ? "partner" : "user";
 
+    // 直前のAIコメントを取得（繰り返し防止）
+    const lastAIComment = messages.filter((m: any) => m.role === "assistant").slice(-1)[0]?.content || "";
+
+    // 会話フェーズ判定
+    const phase = humanCount <= 4 ? "序盤" : humanCount <= 8 ? "中盤" : "終盤";
+
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
@@ -76,32 +76,37 @@ ISSUES_JSON:["争点1","争点2"]
           content: `あなたはカップルカウンセリングの進行役AIです。
 以下の会話を注意深く読み、カウンセラーとして介入してください。
 
-【あなたの役割】
+【現在のフェーズ】${phase}
+【直前のAIコメント】「${lastAIComment}」← これと同じ内容・表現を絶対に繰り返さない
+
+【絶対に守るルール】
+- 直前のAIコメントと異なるアプローチで介入する
+- 「お互いの意見を」「もう少し詳しく」などの汎用表現禁止
+- 会話に出た具体的な言葉を必ず使う
 - 中立を保つ。どちらの味方もしない
-- 会話の内容を必ず反映したコメントを作る
-- 定型文・使い回しは絶対禁止
-- 相手の言葉を引用・言い換えてコメントする
+
+【フェーズ別アプローチ】
+- 序盤: それぞれの状況・気持ちの背景を引き出す
+- 中盤: 感情の根本・本当に伝えたいことを掘り下げる
+- 終盤: 歩み寄りや具体的な解決策を促す
 
 【介入タイプ】
-- mediate  : 怒り・責め・強い対立がある → 感情を落ち着かせる
-- clarify  : すれ違い・誤解・堂々巡りがある → 論点を整理する
-- facilitate: 返答が短い・一方的・会話が止まっている → 引き出す
-- encourage: 歩み寄り・理解・柔らかい言葉がある → 後押しする
+- mediate  : 怒り・責め・強い対立 → 感情を言語化させる
+- clarify  : すれ違い・誤解・堂々巡り → 何が本質的な問題か整理
+- facilitate: 返答が短い・止まっている → 安心して話せる質問
+- encourage: 歩み寄りの言葉がある → その気持ちをさらに深める
 
-【コメントの作り方（重要）】
-- 会話の具体的な内容に必ず言及する
-- 「〇〇について」「〇〇という気持ち」など具体的に
-- 一文で短く。質問は一つだけ
-- 30〜60文字
+【コメント作成】
+- 会話の具体的な内容を必ず反映する
+- 30〜60文字・質問は一つだけ・自然な話し言葉
 
-【nextSpeaker の判断基準】
-- 二人の会話全体を読んで、今どちらに話しかけるのが最も効果的かを判断する
-- 感情が強い方・まだ聞けていない方・誤解している方を優先
-- 直前の発言者かどうかは関係ない。会話の流れで決める
-- "user" または "partner" を返す
+【nextSpeaker】
+- 会話全体を読んで今どちらに話しかけるのが最も効果的か判断
+- 感情が強い・まだ十分に話せていない・誤解している方を優先
+- "user" または "partner"
 
-【出力】JSONのみ：
-{"type":"mediate","comment":"〇〇という気持ちについて、もう少し聞かせてもらえますか？","nextSpeaker":"user"}`,
+【出力】JSONのみ・説明不要：
+{"type":"mediate","comment":"会話内容を反映した具体的なコメント","nextSpeaker":"user"}`,
         },
         ...messages.map((m: any) => ({
           role: m.role === "assistant" ? "assistant" : "user",
@@ -129,15 +134,10 @@ ISSUES_JSON:["争点1","争点2"]
 
     if (!comment) {
       const lastMsg = humanMessages.slice(-1)[0]?.content || "";
-      comment = `「${lastMsg.slice(0, 15)}」について、もう少し詳しく聞かせてもらえますか？`;
+      comment = `「${lastMsg.slice(0, 15)}」について、どんな気持ちがありますか？`;
     }
 
-    return Response.json({
-      shouldIntervene: true,
-      interventionType,
-      reply: comment,
-      nextSpeaker,
-    });
+    return Response.json({ shouldIntervene: true, interventionType, reply: comment, nextSpeaker });
 
   } catch (error) {
     console.error(error);
