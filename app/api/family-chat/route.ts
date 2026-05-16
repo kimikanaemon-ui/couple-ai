@@ -122,14 +122,30 @@ ISSUES_JSON:["争点1","争点2"]
     const shouldIntervene = interventionType !== "none" && comment.length > 0;
     const humanCount = messages.filter((m: any) => m.role !== "assistant").length;
 
-    // フォールバック：2メッセージ以上あるのに介入なしなら強制介入
+    // 2メッセージ以上あるのにGPTがnoneを返した場合、もう一度コメントだけ生成させる
     if (!shouldIntervene && humanCount >= 2) {
-      const lastSpeaker = messages.filter((m: any) => m.role !== "assistant").slice(-1)[0]?.role;
+      const fallback = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [
+          {
+            role: "system",
+            content: `あなたは親子カウンセラーです。以下の会話に対して、進行を助ける一言を日本語で返してください。
+質問は一つだけ。20〜50文字。JSONで返す：{"comment":"〜","nextSpeaker":"parent または child"}`,
+          },
+          ...messages.map((m: any) => ({
+            role: "user",
+            content: `[${m.role}]: ${m.content}`,
+          })),
+        ],
+        response_format: { type: "json_object" },
+      });
+      const fb = JSON.parse(fallback.choices?.[0]?.message?.content || "{}");
+      const fbNext = fb.nextSpeaker === "parent" ? "parent" : "child";
       return Response.json({
         shouldIntervene: true,
         interventionType: "facilitate",
-        reply: "お二人とも、今感じていることを少し話してみませんか？",
-        nextSpeaker: lastSpeaker === "parent" ? "child" : "parent",
+        reply: fb.comment || "今のお気持ちを、もう少し聞かせてもらえますか？",
+        nextSpeaker: fbNext,
       });
     }
 
