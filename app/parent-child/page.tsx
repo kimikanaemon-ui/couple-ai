@@ -119,7 +119,6 @@ export default function ParentChildPage() {
     if (!input.trim()||loading) return;
     const newMessages: Message[] = [...messages, { role: speaker, content: input }];
     setMessages(newMessages); setInput("");
-    setSpeaker(p=>p==="parent"?"child":"parent");
     setInterventionType(null); setMood(detectMood(newMessages));
     setLoading(true);
     try {
@@ -129,7 +128,12 @@ export default function ParentChildPage() {
         setInterventionType(data.interventionType);
         setMessages(p=>[...p,{role:"assistant",content:data.reply}]);
         if (data.interventionType && TYPE_TO_MOOD[data.interventionType]) setMood(TYPE_TO_MOOD[data.interventionType]);
+        // AIが質問した相手のターンにする
+        if (data.nextSpeaker) setSpeaker(data.nextSpeaker as "parent" | "child");
         speak(data.reply, data.interventionType==="mediate"||data.interventionType==="clarify"?"tense":"calm");
+      } else {
+        // AI介入なしの場合のみ自動切替
+        setSpeaker(p => p === "parent" ? "child" : "parent");
       }
     } catch(e){ console.error(e); } finally { setLoading(false); }
   };

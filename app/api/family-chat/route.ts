@@ -75,8 +75,14 @@ ISSUES_JSON:["争点1","争点2"]
 - encourage: ありがとう・ごめん・わかった・歩み寄りの言葉がある
 - none     : 会話が1往復以下のみ
 
+【nextSpeaker の決め方】
+- コメントで質問・呼びかけた相手を nextSpeaker にする
+- 保護者に話しかけた → "parent"
+- お子さんに話しかけた → "child"
+- 両者に話しかけた → 直前に発言していない方
+
 【出力形式】JSONのみ。余計な文字は一切不要。
-{"type":"facilitate","comment":"今どんな気持ちか、もう少し聞かせてもらえますか？"}
+{"type":"facilitate","comment":"今どんな気持ちか、もう少し聞かせてもらえますか？","nextSpeaker":"child"}
 
 【コメント作成ルール】
 - 必ず日本語で一文
@@ -97,25 +103,37 @@ ISSUES_JSON:["争点1","争点2"]
 
     let interventionType = "none";
     let comment = "";
+    let nextSpeaker: string | null = null;
     try {
       const parsed = JSON.parse(raw);
       interventionType = parsed.type || "none";
       comment = parsed.comment?.trim() || "";
+      if (parsed.nextSpeaker === "parent" || parsed.nextSpeaker === "child") {
+        nextSpeaker = parsed.nextSpeaker;
+      }
     } catch (e) { console.error(e); }
+
+    // nextSpeaker が返ってこない場合は直前の発言者の相手にする
+    if (!nextSpeaker) {
+      const lastSpeaker = messages.filter((m: any) => m.role !== "assistant").slice(-1)[0]?.role;
+      nextSpeaker = lastSpeaker === "parent" ? "child" : "parent";
+    }
 
     const shouldIntervene = interventionType !== "none" && comment.length > 0;
     const humanCount = messages.filter((m: any) => m.role !== "assistant").length;
 
     // フォールバック：2メッセージ以上あるのに介入なしなら強制介入
     if (!shouldIntervene && humanCount >= 2) {
+      const lastSpeaker = messages.filter((m: any) => m.role !== "assistant").slice(-1)[0]?.role;
       return Response.json({
         shouldIntervene: true,
         interventionType: "facilitate",
         reply: "お二人とも、今感じていることを少し話してみませんか？",
+        nextSpeaker: lastSpeaker === "parent" ? "child" : "parent",
       });
     }
 
-    return Response.json({ shouldIntervene, interventionType, reply: shouldIntervene ? comment : null });
+    return Response.json({ shouldIntervene, interventionType, reply: shouldIntervene ? comment : null, nextSpeaker });
 
   } catch (error) {
     console.error(error);
