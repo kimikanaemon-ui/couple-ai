@@ -30,6 +30,7 @@ export default function ParentChildPage() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [listening, setListening] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
   const [speaker, setSpeaker] = useState<"parent" | "child">("parent");
   const [interventionType, setInterventionType] = useState<string | null>(null);
   const [mood, setMood] = useState<MoodKey>("neutral");
@@ -63,22 +64,35 @@ export default function ParentChildPage() {
     const voices = window.speechSynthesis.getVoices();
     const voice = voices.find(v => v.lang==="ja-JP" && (v.name.includes("Google")||v.name.includes("Kyoko")||v.name.includes("Siri")||v.name.includes("Microsoft"))) || voices.find(v => v.lang==="ja-JP");
     const rate = emotion === "tense" ? 1.0 : 0.8;
-    text.split(/(?<=[。？！\n])/).map(s=>s.trim()).filter(Boolean).forEach(sentence => {
+    const sentences = text.split(/(?<=[。？！\n])/).map(s=>s.trim()).filter(Boolean);
+
+    setIsSpeaking(true);
+
+    sentences.forEach((sentence, i) => {
       const u = new SpeechSynthesisUtterance();
       u.lang="ja-JP"; u.volume=1; u.rate=rate; u.pitch=0.85;
       if (voice) u.voice=voice;
       u.text = sentence.replace(/、/g,"、…");
+      // 最後の文が終わったらisSpeakingをfalseに
+      if (i === sentences.length - 1) {
+        u.onend = () => setIsSpeaking(false);
+      }
       window.speechSynthesis.speak(u);
     });
   };
 
   const startListening = () => {
+    // AI が話している間は無効
+    if (isSpeaking) {
+      window.speechSynthesis.cancel();
+      setIsSpeaking(false);
+    }
     const SR = (window as any).SpeechRecognition||(window as any).webkitSpeechRecognition;
     if (!SR) { alert("このブラウザは音声入力に対応していません"); return; }
     const r = new SR();
     r.lang = "ja-JP";
-    r.continuous = true;        // 話し続けても止まらない
-    r.interimResults = true;    // 途中結果も表示
+    r.continuous = true;
+    r.interimResults = true;
     r.maxAlternatives = 1;
 
     let finalTranscript = "";
@@ -96,18 +110,15 @@ export default function ParentChildPage() {
           interim = t;
         }
       }
-      // 途中結果も入力欄に表示
       setInput(finalTranscript + interim);
-
-      // 2秒無音で自動停止
+      // 5秒無音で自動停止
       if (silenceTimer) clearTimeout(silenceTimer);
-      silenceTimer = setTimeout(() => r.stop(), 2000);
+      silenceTimer = setTimeout(() => r.stop(), 5000);
     };
 
     r.onend = () => {
       setListening(false);
       if (silenceTimer) clearTimeout(silenceTimer);
-      // 最終テキストを確定
       if (finalTranscript) setInput(finalTranscript);
     };
 
@@ -306,7 +317,11 @@ export default function ParentChildPage() {
               placeholder={speaker==="parent"?"保護者の気持ちを書いてください…":"お子さんの気持ちを書いてください…"}
               rows={2} style={{flex:1,border:`0.5px solid ${speaker==="parent"?"#FAC775":"#B5D4F4"}`,borderRadius:16,padding:"10px 14px",fontSize:13,fontFamily:"inherit",resize:"none",background:"white",color:"#3a2a1a",lineHeight:1.5}}/>
             <div style={{display:"flex",flexDirection:"column",gap:6}}>
-              <button onClick={startListening} style={{width:36,height:36,borderRadius:"50%",border:"none",background:listening?"#E24B4A":"#f5ede0",color:listening?"white":"#c4a882",fontSize:16,cursor:"pointer"}}>🎤</button>
+              <button onClick={startListening}
+                title={isSpeaking ? "AI発話中（タップで停止）" : "音声入力"}
+                style={{width:36,height:36,borderRadius:"50%",border:"none",background:listening?"#E24B4A":isSpeaking?"#EF9F27":"#f5ede0",color:listening||isSpeaking?"white":"#c4a882",fontSize:16,cursor:"pointer"}}>
+                {isSpeaking ? "🔇" : "🎤"}
+              </button>
               <button onClick={sendMessage} disabled={loading} style={{width:36,height:36,borderRadius:"50%",border:"none",background:speaker==="parent"?"#E07B2A":"#378ADD",color:"white",fontSize:16,cursor:"pointer",opacity:loading?0.5:1}}>↑</button>
             </div>
           </div>
