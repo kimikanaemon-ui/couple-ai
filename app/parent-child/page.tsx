@@ -111,9 +111,9 @@ export default function ParentChildPage() {
         }
       }
       setInput(finalTranscript + interim);
-      // 5秒無音で自動停止
+      // 10秒無音で自動停止
       if (silenceTimer) clearTimeout(silenceTimer);
-      silenceTimer = setTimeout(() => r.stop(), 5000);
+      silenceTimer = setTimeout(() => r.stop(), 10000);
     };
 
     r.onend = () => {

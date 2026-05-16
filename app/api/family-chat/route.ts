@@ -23,6 +23,7 @@ export async function POST(req: Request) {
     const messages = body.messages || [];
     const isEndSession = body.isEndSession || false;
 
+    // セッション終了
     if (isEndSession) {
       const completion = await openai.chat.completions.create({
         model: "gpt-4o-mini",
@@ -56,100 +57,87 @@ ISSUES_JSON:["争点1","争点2"]
       return Response.json({ reply, emotions, keywords, issues });
     }
 
+    // 通常会話：1回のAPIで判定＋コメント生成を同時に行う
+    const humanMessages = messages.filter((m: any) => m.role !== "assistant");
+    const humanCount = humanMessages.length;
+
+    // 会話が1件以下は介入しない
+    if (humanCount <= 1) {
+      return Response.json({ shouldIntervene: false, interventionType: "none", reply: null });
+    }
+
+    const lastSpeaker = humanMessages.slice(-1)[0]?.role;
+    const defaultNext = lastSpeaker === "parent" ? "child" : "parent";
+
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
         {
           role: "system",
-          content: `あなたは親子の対話を支援するカウンセラーAIです。
-会話を読んで介入タイプをJSONで返してください。
+          content: `あなたは親子カウンセリングの進行役AIです。
+以下の会話を注意深く読み、カウンセラーとして介入してください。
 
-【ルール】
-- 会話が2往復以上あれば必ず none 以外を返す
-- none は会話が1往復以下の時だけ
+【あなたの役割】
+- 中立を保つ。親の味方も子の味方もしない
+- 会話の内容を必ず反映したコメントを作る
+- 定型文・使い回しは絶対禁止
+- 相手の言葉を引用・言い換えてコメントする
 
-【タイプ選択基準】
-- mediate  : 怒り・非難・責め・強い感情が1つでもある
-- clarify  : 同じ内容が繰り返されている・話がかみ合っていない
-- facilitate: 返答が短い（10文字以下）・一言だけ・会話が止まっている
-- encourage: ありがとう・ごめん・わかった・歩み寄りの言葉がある
-- none     : 会話が1往復以下のみ
+【介入タイプ】
+- mediate  : 怒り・責め・強い対立がある → 感情を落ち着かせる
+- clarify  : すれ違い・誤解・堂々巡りがある → 論点を整理する
+- facilitate: 返答が短い・一方的・会話が止まっている → 引き出す
+- encourage: 歩み寄り・理解・柔らかい言葉がある → 後押しする
 
-【nextSpeaker の決め方】
-- コメントで質問・呼びかけた相手を nextSpeaker にする
-- 保護者に話しかけた → "parent"
-- お子さんに話しかけた → "child"
-- 両者に話しかけた → 直前に発言していない方
+【コメントの作り方（重要）】
+- 会話の具体的な内容（スマホ・ルール・友達など）に必ず言及する
+- 「〇〇について」「〇〇という気持ち」など具体的に
+- 一文で短く。質問は一つだけ
+- 30〜60文字
 
-【出力形式】JSONのみ。余計な文字は一切不要。
-{"type":"facilitate","comment":"今どんな気持ちか、もう少し聞かせてもらえますか？","nextSpeaker":"child"}
+【nextSpeaker】
+- コメントで話しかけた相手を指定する
+- "parent" または "child"
 
-【コメント作成ルール】
-- 必ず日本語で一文
-- 親子関係に配慮した優しい言葉
-- 質問は一つだけ
-- 20文字〜50文字程度`,
+【出力】JSONのみ：
+{"type":"mediate","comment":"スマホのルールについて、お子さんはどんなルールなら守れそうだと思いますか？","nextSpeaker":"child"}`,
         },
         ...messages.map((m: any) => ({
-          role: "user",
-          content: `[${m.role}]: ${m.content}`,
+          role: m.role === "assistant" ? "assistant" : "user",
+          content: `[${m.role === "parent" ? "保護者" : m.role === "child" ? "お子さん" : "AI"}]: ${m.content}`,
         })),
       ],
       response_format: { type: "json_object" },
     });
 
-    const raw = completion.choices?.[0]?.message?.content?.trim() || '{"type":"none","comment":""}';
+    const raw = completion.choices?.[0]?.message?.content?.trim() || "{}";
     console.log("Family AI判定:", raw);
 
-    let interventionType = "none";
+    let interventionType = "facilitate";
     let comment = "";
-    let nextSpeaker: string | null = null;
+    let nextSpeaker = defaultNext;
+
     try {
       const parsed = JSON.parse(raw);
-      interventionType = parsed.type || "none";
+      interventionType = parsed.type || "facilitate";
       comment = parsed.comment?.trim() || "";
       if (parsed.nextSpeaker === "parent" || parsed.nextSpeaker === "child") {
         nextSpeaker = parsed.nextSpeaker;
       }
     } catch (e) { console.error(e); }
 
-    // nextSpeaker が返ってこない場合は直前の発言者の相手にする
-    if (!nextSpeaker) {
-      const lastSpeaker = messages.filter((m: any) => m.role !== "assistant").slice(-1)[0]?.role;
-      nextSpeaker = lastSpeaker === "parent" ? "child" : "parent";
+    // コメントが空の場合のみフォールバック（具体的な内容を含む）
+    if (!comment) {
+      const lastMsg = humanMessages.slice(-1)[0]?.content || "";
+      comment = `「${lastMsg.slice(0, 15)}」について、もう少し詳しく聞かせてもらえますか？`;
     }
 
-    const shouldIntervene = interventionType !== "none" && comment.length > 0;
-    const humanCount = messages.filter((m: any) => m.role !== "assistant").length;
-
-    // 2メッセージ以上あるのにGPTがnoneを返した場合、もう一度コメントだけ生成させる
-    if (!shouldIntervene && humanCount >= 2) {
-      const fallback = await openai.chat.completions.create({
-        model: "gpt-4o-mini",
-        messages: [
-          {
-            role: "system",
-            content: `あなたは親子カウンセラーです。以下の会話に対して、進行を助ける一言を日本語で返してください。
-質問は一つだけ。20〜50文字。JSONで返す：{"comment":"〜","nextSpeaker":"parent または child"}`,
-          },
-          ...messages.map((m: any) => ({
-            role: "user",
-            content: `[${m.role}]: ${m.content}`,
-          })),
-        ],
-        response_format: { type: "json_object" },
-      });
-      const fb = JSON.parse(fallback.choices?.[0]?.message?.content || "{}");
-      const fbNext = fb.nextSpeaker === "parent" ? "parent" : "child";
-      return Response.json({
-        shouldIntervene: true,
-        interventionType: "facilitate",
-        reply: fb.comment || "今のお気持ちを、もう少し聞かせてもらえますか？",
-        nextSpeaker: fbNext,
-      });
-    }
-
-    return Response.json({ shouldIntervene, interventionType, reply: shouldIntervene ? comment : null, nextSpeaker });
+    return Response.json({
+      shouldIntervene: true,
+      interventionType,
+      reply: comment,
+      nextSpeaker,
+    });
 
   } catch (error) {
     console.error(error);
