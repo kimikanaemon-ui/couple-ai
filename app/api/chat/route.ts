@@ -138,6 +138,9 @@ ${introData.userName ? `【二人の基本情報】
 - 2〜3文以内
 - 直前のAIコメントと同じ言い回し禁止：「${lastAIComment}」
 - 「お互いの」「整理しましょう」などの定型句禁止
+- 「整理」という言葉を使う場合は必ず具体的な内容を続ける
+  例：「今は"安心したい"と"縛られたくない"がぶつかっています」
+  禁止：整理だけ提案して終わる・「話し合いましょう」で終わる
 
 【発言回数】あなた：${userCount}回 / パートナー：${partnerCount}回
 
@@ -191,6 +194,27 @@ ${introData.userName ? `【二人の基本情報】
     if (!comment) {
       const lastMsg = humanMessages.slice(-1)[0]?.content || "";
       comment = `「${lastMsg.slice(0, 15)}」について、どんな気持ちがありますか？`;
+    }
+
+    // 「整理」を提案したなら必ず具体化する
+    if (
+      comment.includes("整理") &&
+      !comment.includes("ぶつか") &&
+      !comment.includes("ズレ") &&
+      !comment.includes("違い") &&
+      !comment.includes("差") &&
+      !comment.includes("温度")
+    ) {
+      const recentContent = humanMessages.slice(-4).map((m: any) => m.content).join(" ");
+      let addition = " 今は「求めている関係性の温度差」が強く出ている状態かもしれません。";
+      if (recentContent.includes("不安")) {
+        addition = " 今は「不安をどう扱うか」という、感覚ではなく言葉にしたい段階に来ている感じがあります。";
+      } else if (recentContent.includes("連絡") || recentContent.includes("LINE")) {
+        addition = " 問題は連絡頻度そのものではなく、「優先されている感覚のズレ」かもしれません。";
+      } else if (recentContent.includes("安心") || recentContent.includes("縛")) {
+        addition = " 今は「安心したい気持ち」と「縛られたくない気持ち」がぶつかっています。";
+      }
+      comment += addition;
     }
 
     return Response.json({ shouldIntervene: true, interventionType, reply: comment, nextSpeaker });
