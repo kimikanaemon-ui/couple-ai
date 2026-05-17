@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { supabase } from "@/lib/supabase";
 
 type Role = "user" | "partner" | "assistant";
 type Message = { role: Role; content: string };
@@ -133,6 +134,19 @@ export default function CouplePage() {
       const final: Message[] = [...messages, { role:"assistant", content:"【セッションまとめ】\n\n"+data.reply }];
       setMessages(final);
       setSessions(p=>[{id:Date.now(),date:new Date().toLocaleString(),messages:final,emotions:data.emotions,keywords:data.keywords,issues:data.issues},...p]);
+
+      // Supabase に保存（ログイン済みの場合のみ）
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        await supabase.from("sessions").insert({
+          user_id: session.user.id,
+          type: "couple",
+          messages: final,
+          emotions: data.emotions,
+          keywords: data.keywords,
+          issues: data.issues,
+        });
+      }
     } catch(e){ console.error(e); } finally { setLoading(false); }
   };
 
