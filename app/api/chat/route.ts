@@ -58,21 +58,52 @@ ISSUES_JSON:["争点1","争点2"]`,
     }
 
     const humanMessages = messages.filter((m: any) => m.role !== "assistant");
+    const assistantMessages = messages.filter((m: any) => m.role === "assistant");
     const humanCount = humanMessages.length;
+    const assistantCount = assistantMessages.length;
 
-    // 介入条件
-    const shouldIntervene =
-      humanCount >= 2 ||
-      (messages.slice(-1)[0]?.content?.length ?? 0) > 25;
+    // 会話ステージ
+    const conversationStage =
+      humanCount < 6 ? "listen" : humanCount < 12 ? "analyze" : "resolve";
 
-    if (!shouldIntervene) {
+    // listenステージかつAI介入済みなら待機（会話を循環させる）
+    if (conversationStage === "listen" && assistantCount > 0) {
       return Response.json({ shouldIntervene: false, interventionType: "none", reply: null });
     }
 
-    const lastAIComment = messages.filter((m: any) => m.role === "assistant").slice(-1)[0]?.content || "";
-    const phase = humanCount <= 4 ? "序盤" : humanCount <= 8 ? "中盤" : "終盤";
+    if (humanCount < 2) {
+      return Response.json({ shouldIntervene: false, interventionType: "none", reply: null });
+    }
+
+    const lastAIComment = assistantMessages.slice(-1)[0]?.content || "";
     const userCount = humanMessages.filter((m: any) => m.role === "user").length;
     const partnerCount = humanMessages.filter((m: any) => m.role === "partner").length;
+
+    const stagePrompt: Record<string, string> = {
+      listen: `【今のステージ：listen】
+二人の会話を循環させることが最優先です。
+1人から長く情報収集しないでください。
+橋渡しの質問を一つだけ使ってください：
+- 「相手はその時どう受け取っていたと思いますか？」
+- 「今の言葉、どう感じましたか？」
+- 「その認識は合っていますか？」
+会話のボールを相手側に渡してください。
+分析・解釈は一切しないでください。`,
+
+      analyze: `【今のステージ：analyze】
+双方の認識差が見えてきた頃合いです。
+会話の奥にあるものを自然な言葉で一言：
+- 怒りの裏の不安や寂しさ
+- 短い返答の裏の諦め
+- 繰り返しのすれ違いパターン
+「〜なのかもしれないですね」のような自然な表現を使ってください。
+必要なら橋渡し質問も使ってください。`,
+
+      resolve: `【今のステージ：resolve】
+歩み寄りや気づきを後押しするタイミングです。
+会話のパターンを穏やかに言語化し、
+二人が次の一歩を踏み出せるよう背中を押してください。`,
+    };
 
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
@@ -81,58 +112,37 @@ ISSUES_JSON:["争点1","争点2"]`,
           role: "system",
           content: `あなたは関係性を読むカップルカウンセラーです。
 
-【フェーズ別の振る舞い（最重要）】
+${stagePrompt[conversationStage]}
 
-▼ 序盤（${phase === "序盤" ? "← 今ここ" : ""}）：情報収集・整理役
-- 分析・解釈・心理的読み取りは一切しない
-- 双方の事実・認識・感情の違いを丁寧に引き出す
-- 以下のような確認・深掘り質問を中心にする：
-  「それは実際に起きたことですか？」
-  「そのとき、どう感じましたか？」
-  「相手の言葉をどう受け取りましたか？」
-  「具体的にはどんな状況でしたか？」
-- 十分な情報が集まるまで分析しない
-
-▼ 中盤（${phase === "中盤" ? "← 今ここ" : ""}）：気持ちの翻訳・整理
-- 双方の感情や認識のズレが見えてきたら、自然な言葉で整理する
-- 「怒りの裏の不安」「沈黙の裏の諦め」など、奥にあるものを一言で
-- 心理学用語は使わない。「〜なのかもしれないですね」で表現
-
-▼ 終盤（${phase === "終盤" ? "← 今ここ" : ""}）：関係性の言語化・歩み寄り
-- 会話パターンや繰り返しのすれ違いを穏やかに言語化
-- 歩み寄りや気づきを後押しする
-
-【スタイル全般】
+【スタイル全般（厳守）】
 - ユーザーが「分析された」ではなく「わかってもらえた」と感じる言葉を選ぶ
 - 心理学用語・専門用語を使わない
-- 毎回両方を分析しない
+- 1人へのカウンセリングではなく2人の会話循環を優先
+- 必要以上の深掘り禁止
 - 質問は最大1つ。時には質問しない
 - 2〜3文以内
-- 直前のAIコメントと同じ言い回しを繰り返さない
+- 直前のAIコメントと同じ言い回し禁止：「${lastAIComment}」
 - 「お互いの」「整理しましょう」などの定型句禁止
 
-【現在のフェーズ】${phase}
 【発言回数】あなた：${userCount}回 / パートナー：${partnerCount}回
-【直前のAIコメント】「${lastAIComment}」← 違うアプローチで
 
 【介入タイプ】
+- facilitate: 会話を相手側に渡す橋渡し
 - mediate  : 感情が激しい → 裏にある気持ちを一言で
-- clarify  : すれ違い → 何がズレているか自然に整理
-- facilitate: 止まっている → 安心できる問いかけ
-- encourage: 歩み寄り → そっと後押し
-- analyze  : 繰り返しのパターン → 気づきを自然な言葉で
-- reflect  : 一方の言葉を別の角度で言い換える
+- clarify  : すれ違いを自然に整理
+- encourage: 歩み寄りをそっと後押し
 - translate: 一方の気持ちをもう一方に届ける
+- reflect  : 一方の言葉を別の角度で言い換える
 
 【nextSpeaker の判断基準】
-優先度1: AIが質問した → その人が答えていなければ同じ人を続ける
-優先度2: 深掘りが必要 → 「〜だから」「〜なんだ」と話し始めた人を続ける
+優先度1: AIが質問した → 答えていない人を続ける
+優先度2: 「〜だから」「〜なんだ」と話し始めた → その人を続ける
 優先度3: 3回以上連続 → 相手に切り替える
 優先度4: それ以外 → 相手に切り替える
 "user" または "partner" を返す
 
 【出力】JSONのみ：
-{"type":"facilitate","comment":"自然な言葉での一言","nextSpeaker":"user"}`,
+{"type":"facilitate","comment":"自然な橋渡しの一言","nextSpeaker":"partner"}`,
         },
         ...messages.map((m: any) => ({
           role: m.role === "assistant" ? "assistant" : "user",
