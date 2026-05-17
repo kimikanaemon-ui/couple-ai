@@ -62,13 +62,17 @@ ISSUES_JSON:["争点1","争点2"]`,
     const humanCount = humanMessages.length;
     const assistantCount = assistantMessages.length;
 
-    // 会話ステージ
+    // 会話ステージ（3〜4発言ごとにAIが入る）
     const conversationStage =
       humanCount < 6 ? "listen" : humanCount < 12 ? "analyze" : "resolve";
 
-    // listenステージかつAI介入済みなら待機（会話を循環させる）
-    if (conversationStage === "listen" && assistantCount > 0) {
-      return Response.json({ shouldIntervene: false, interventionType: "none", reply: null });
+    // listenステージ：3〜4発言に1回だけ介入
+    if (conversationStage === "listen") {
+      const lastAIIndex = messages.map((m: any) => m.role).lastIndexOf("assistant");
+      const messagesSinceLastAI = lastAIIndex === -1 ? humanCount : messages.slice(lastAIIndex + 1).filter((m: any) => m.role !== "assistant").length;
+      if (messagesSinceLastAI < 3) {
+        return Response.json({ shouldIntervene: false, interventionType: "none", reply: null });
+      }
     }
 
     if (humanCount < 2) {
@@ -80,29 +84,31 @@ ISSUES_JSON:["争点1","争点2"]`,
     const partnerCount = humanMessages.filter((m: any) => m.role === "partner").length;
 
     const stagePrompt: Record<string, string> = {
-      listen: `【今のステージ：listen】
+      listen: `【今のステージ：listen（3〜4発言に1回だけ介入）】
 二人の会話を循環させることが最優先です。
-1人から長く情報収集しないでください。
-橋渡しの質問を一つだけ使ってください：
+橋渡しの質問を一つだけ：
 - 「相手はその時どう受け取っていたと思いますか？」
 - 「今の言葉、どう感じましたか？」
 - 「その認識は合っていますか？」
 会話のボールを相手側に渡してください。
 分析・解釈は一切しないでください。`,
 
-      analyze: `【今のステージ：analyze】
-双方の認識差が見えてきた頃合いです。
-会話の奥にあるものを自然な言葉で一言：
-- 怒りの裏の不安や寂しさ
-- 短い返答の裏の諦め
-- 繰り返しのすれ違いパターン
-「〜なのかもしれないですね」のような自然な表現を使ってください。
-必要なら橋渡し質問も使ってください。`,
+      analyze: `【今のステージ：analyze（核心の言語化）】
+曖昧に優しくまとめるのではなく、
+「何と何がぶつかっているのか」を短く具体的に言語化してください。
 
-      resolve: `【今のステージ：resolve】
-歩み寄りや気づきを後押しするタイミングです。
-会話のパターンを穏やかに言語化し、
-二人が次の一歩を踏み出せるよう背中を押してください。`,
+例：
+- 「今ここで起きているのは、安心したい気持ちと、自由でいたい気持ちのぶつかりかもしれないですね」
+- 「不安をどう扱うか、感覚ではなく言葉にしたい段階に来ている感じがします」
+- 「○○さんは距離を縮めたくて、○○さんは自分のペースを守りたい。そのすれ違いが続いているのかもしれません」
+
+心理テストのように、自分でも整理できる形で返してください。
+「具体的な方法を探るために〜」のような曖昧なまとめ方は禁止です。`,
+
+      resolve: `【今のステージ：resolve（次の一歩）】
+核心が言語化された後のタイミングです。
+二人が実際に動ける小さな一歩を一緒に考えてください。
+「〜してみませんか」のような具体的な提案も可能です。`,
     };
 
     const completion = await openai.chat.completions.create({
