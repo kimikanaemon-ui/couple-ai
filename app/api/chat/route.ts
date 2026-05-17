@@ -1,193 +1,465 @@
 import OpenAI from "openai";
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const openai = new OpenAI({
+apiKey: process.env.OPENAI_API_KEY,
+});
 
 const parseJson = (text: string, key: string): any => {
-  const start = text.indexOf(`${key}:`);
-  if (start === -1) return null;
-  const rest = text.slice(start + key.length + 1).trim();
-  const opener = rest[0];
-  const closer = opener === "{" ? "}" : "]";
-  let depth = 0, end = -1;
-  for (let i = 0; i < rest.length; i++) {
-    if (rest[i] === opener) depth++;
-    else if (rest[i] === closer) { depth--; if (depth === 0) { end = i; break; } }
-  }
-  if (end === -1) return null;
-  try { return JSON.parse(rest.slice(0, end + 1)); } catch { return null; }
+const start = text.indexOf(`${key}:`);
+if (start === -1) return null;
+
+const rest = text.slice(start + key.length + 1).trim();
+const opener = rest[0];
+const closer = opener === "{" ? "}" : "]";
+
+let depth = 0;
+let end = -1;
+
+for (let i = 0; i < rest.length; i++) {
+if (rest[i] === opener) depth++;
+else if (rest[i] === closer) {
+depth--;
+if (depth === 0) {
+end = i;
+break;
+}
+}
+}
+
+if (end === -1) return null;
+
+try {
+return JSON.parse(rest.slice(0, end + 1));
+} catch {
+return null;
+}
 };
 
 export async function POST(req: Request) {
-  try {
-    const body = await req.json();
-    const messages = body.messages || [];
-    const isEndSession = body.isEndSession || false;
+try {
+const body = await req.json();
 
-    if (isEndSession) {
-      const completion = await openai.chat.completions.create({
-        model: "gpt-4o-mini",
-        messages: [
-          {
-            role: "system",
-            content: `あなたは優しく冷静なカップルカウンセラーです。
-ここまでの会話をカウンセリング視点で短くまとめてください。
+```
+const messages = body.messages || [];
+const isEndSession = body.isEndSession || false;
 
-まとめの末尾に必ず以下の形式でデータを付けてください（1行ずつ）：
+// =========================
+// セッション終了
+// =========================
+
+if (isEndSession) {
+  const completion = await openai.chat.completions.create({
+    model: "gpt-4o-mini",
+    messages: [
+      {
+        role: "system",
+        content: `
+```
+
+あなたは優しく冷静なカップルカウンセラーです。
+
+ここまでの会話を短くまとめてください。
+
+重要：
+
+* 綺麗にまとめすぎない
+* 実際にぶつかっていたテーマを自然に言語化
+* 「何がズレていたのか」を中心に整理
+
+最後に必ず以下を付けてください：
 
 EMOTIONS_JSON:{"user":{"anger":0,"sadness":0,"anxiety":0,"understanding":0},"partner":{"anger":0,"sadness":0,"anxiety":0,"understanding":0}}
-KEYWORDS_JSON:["キーワード1","キーワード2","キーワード3"]
-ISSUES_JSON:["争点1","争点2"]`,
-          },
-          ...messages.map((m: any) => ({
-            role: m.role === "assistant" ? "assistant" : "user",
-            content:
-              m.role === "user"
-                ? `【あなた】${m.content}`
-                : m.role === "partner"
-                ? `【パートナー】${m.content}`
-                : `【AI】${m.content}`,
-          })),
-        ],
-      });
-      const raw = completion.choices?.[0]?.message?.content || "";
-      const emotions = parseJson(raw, "EMOTIONS_JSON");
-      const keywords = parseJson(raw, "KEYWORDS_JSON");
-      const issues = parseJson(raw, "ISSUES_JSON");
-      const reply = raw.replace(/EMOTIONS_JSON:[\s\S]+$/, "").trim();
-      return Response.json({ reply, emotions, keywords, issues });
-    }
 
-    const humanMessages = messages.filter((m: any) => m.role !== "assistant");
-    const assistantMessages = messages.filter((m: any) => m.role === "assistant");
-    const humanCount = humanMessages.length;
-    const assistantCount = assistantMessages.length;
+KEYWORDS_JSON:["キーワード1","キーワード2"]
 
-    // 会話ステージ（3〜4発言ごとにAIが入る）
-    const conversationStage =
-      humanCount < 6 ? "listen" : humanCount < 12 ? "analyze" : "resolve";
+ISSUES_JSON:["争点1","争点2"]
+`,
+},
 
-    // listenステージ：3〜4発言に1回だけ介入
-    if (conversationStage === "listen") {
-      const lastAIIndex = messages.map((m: any) => m.role).lastIndexOf("assistant");
-      const messagesSinceLastAI = lastAIIndex === -1 ? humanCount : messages.slice(lastAIIndex + 1).filter((m: any) => m.role !== "assistant").length;
-      if (messagesSinceLastAI < 3) {
-        return Response.json({ shouldIntervene: false, interventionType: "none", reply: null });
-      }
-    }
+```
+      ...messages.map((m: any) => ({
+        role: m.role === "assistant" ? "assistant" : "user",
+        content:
+          m.role === "user"
+            ? `【あなた】${m.content}`
+            : m.role === "partner"
+            ? `【パートナー】${m.content}`
+            : `【AI】${m.content}`,
+      })),
+    ],
+  });
 
-    if (humanCount < 2) {
-      return Response.json({ shouldIntervene: false, interventionType: "none", reply: null });
-    }
+  const raw =
+    completion.choices?.[0]?.message?.content || "";
 
-    const lastAIComment = assistantMessages.slice(-1)[0]?.content || "";
-    const userCount = humanMessages.filter((m: any) => m.role === "user").length;
-    const partnerCount = humanMessages.filter((m: any) => m.role === "partner").length;
+  const emotions = parseJson(raw, "EMOTIONS_JSON");
+  const keywords = parseJson(raw, "KEYWORDS_JSON");
+  const issues = parseJson(raw, "ISSUES_JSON");
 
-    const stagePrompt: Record<string, string> = {
-      listen: `【今のステージ：listen（3〜4発言に1回だけ介入）】
-二人の会話を循環させることが最優先です。
-橋渡しの質問を一つだけ：
-- 「相手はその時どう受け取っていたと思いますか？」
-- 「今の言葉、どう感じましたか？」
-- 「その認識は合っていますか？」
-会話のボールを相手側に渡してください。
-分析・解釈は一切しないでください。`,
+  const reply = raw.replace(
+    /EMOTIONS_JSON:[\s\S]+$/,
+    ""
+  ).trim();
 
-      analyze: `【今のステージ：analyze（核心の言語化）】
-曖昧に優しくまとめるのではなく、
-「何と何がぶつかっているのか」を短く具体的に言語化してください。
+  return Response.json({
+    reply,
+    emotions,
+    keywords,
+    issues,
+  });
+}
+
+// =========================
+// 通常会話
+// =========================
+
+const humanMessages = messages.filter(
+  (m: any) => m.role !== "assistant"
+);
+
+const assistantMessages = messages.filter(
+  (m: any) => m.role === "assistant"
+);
+
+const humanCount = humanMessages.length;
+
+if (humanCount < 2) {
+  return Response.json({
+    shouldIntervene: false,
+    interventionType: "none",
+    reply: null,
+  });
+}
+
+// =========================
+// 会話ステージ
+// =========================
+
+const conversationStage =
+  humanCount < 8
+    ? "listen"
+    : humanCount < 18
+    ? "analyze"
+    : "resolve";
+
+// =========================
+// AI介入頻度
+// listen中は3〜4往復放置
+// =========================
+
+const lastAIIndex = messages
+  .map((m: any) => m.role)
+  .lastIndexOf("assistant");
+
+const humanSinceLastAI =
+  lastAIIndex === -1
+    ? humanCount
+    : messages
+        .slice(lastAIIndex + 1)
+        .filter((m: any) => m.role !== "assistant")
+        .length;
+
+if (
+  conversationStage === "listen" &&
+  humanSinceLastAI < 4
+) {
+  return Response.json({
+    shouldIntervene: false,
+    interventionType: "none",
+    reply: null,
+  });
+}
+
+const lastAIComment =
+  assistantMessages.slice(-1)[0]?.content || "";
+
+const userCount = humanMessages.filter(
+  (m: any) => m.role === "user"
+).length;
+
+const partnerCount = humanMessages.filter(
+  (m: any) => m.role === "partner"
+).length;
+
+// =========================
+// ステージ別Prompt
+// =========================
+
+const stagePrompt: Record<string, string> = {
+  listen: `
+```
+
+【listenステージ】
+
+今は分析しない。
+
+最優先は、
+二人の会話を循環させること。
+
+AIは主役にならない。
+
+やること：
+
+* 認識の確認
+* 相手への橋渡し
+* 一言だけ整理
+* 短く言い換える
+
+だけで十分。
+
+良い例：
+
+* 「パートナーさんは、
+  “責められている”
+  感覚になっていましたか？」
+
+* 「今は、
+  “安心したい側”と
+  “自由でいたい側”
+  がぶつかっていそうですね」
+
+* 「予定共有の感覚が
+  かなり違っていそうですね」
+
+禁止：
+
+* 深掘り質問
+* 長い分析
+* 綺麗なまとめ
+* 「詳しく教えてください」
+* 「どうしてそう感じたのですか？」
+
+1〜2文で終える。
+`,
+
+```
+  analyze: `
+```
+
+【analyzeステージ】
+
+今は、
+二人のズレを
+自然に言語化してよい。
+
+ただし：
+
+* 心理学用語禁止
+* AIっぽい分析禁止
+* 断定禁止
 
 例：
-- 「今ここで起きているのは、安心したい気持ちと、自由でいたい気持ちのぶつかりかもしれないですね」
-- 「不安をどう扱うか、感覚ではなく言葉にしたい段階に来ている感じがします」
-- 「○○さんは距離を縮めたくて、○○さんは自分のペースを守りたい。そのすれ違いが続いているのかもしれません」
 
-心理テストのように、自分でも整理できる形で返してください。
-「具体的な方法を探るために〜」のような曖昧なまとめ方は禁止です。`,
+* 「安心を求めるほど、
+  相手は縛られる感覚になっているのかもしれないですね」
 
-      resolve: `【今のステージ：resolve（次の一歩）】
-核心が言語化された後のタイミングです。
-二人が実際に動ける小さな一歩を一緒に考えてください。
-「〜してみませんか」のような具体的な提案も可能です。`,
-    };
+* 「未来を急ぎたい気持ちと、
+  慎重になりたい気持ちが
+  ズレている感じがありますね」
 
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [
-        {
-          role: "system",
-          content: `あなたは関係性を読むカップルカウンセラーです。
+* 「“誠意”の定義が
+  かなり違っていそうです」
+
+長く喋らない。
+`,
+
+```
+  resolve: `
+```
+
+【resolveステージ】
+
+今は、
+小さな歩み寄りを作る段階。
+
+ただし説教禁止。
+
+* 現実的
+* 小さい
+* 実行可能
+
+を重視。
+
+例：
+
+* 「まずは予定共有だけ
+  ルール化してみますか？」
+
+* 「LINE量ではなく、
+  返信タイミングを決める方法もありそうですね」
+  `,
+  };
+
+  const completion =
+  await openai.chat.completions.create({
+  model: "gpt-4o-mini",
+
+  ```
+    messages: [
+      {
+        role: "system",
+
+        content: `
+  ```
+
+あなたは、
+会話のズレを可視化する
+カップルカウンセラーAIです。
 
 ${stagePrompt[conversationStage]}
 
-【スタイル全般（厳守）】
-- ユーザーが「分析された」ではなく「わかってもらえた」と感じる言葉を選ぶ
-- 心理学用語・専門用語を使わない
-- 1人へのカウンセリングではなく2人の会話循環を優先
-- 必要以上の深掘り禁止
-- 質問は最大1つ。時には質問しない
-- 2〜3文以内
-- 直前のAIコメントと同じ言い回し禁止：「${lastAIComment}」
-- 「お互いの」「整理しましょう」などの定型句禁止
+【最重要】
 
-【発言回数】あなた：${userCount}回 / パートナー：${partnerCount}回
+1人を深掘りするAIではない。
+
+目的は：
+
+「二人の認識のズレを
+自然に見えるようにすること」
+
+AIは：
+
+* 橋渡し役
+* 整理役
+* 翻訳役
+
+として振る舞う。
+
+【禁止】
+
+* 毎回分析する
+* 毎回まとめる
+* AIが喋りすぎる
+* カウンセラーっぽい綺麗事
+
+禁止例：
+
+* 「お互いを理解することが大切ですね」
+* 「不安があるのかもしれませんね」
+* 「詳しく教えてください」
+
+【スタイル】
+
+* 短く
+* 自然に
+* 人間っぽく
+* 1〜2文
+* 時には一言だけ
+
+【発言回数】
+
+あなた：${userCount}回
+パートナー：${partnerCount}回
+
+【直前のAIコメント】
+
+「${lastAIComment}」
+
+↑
+これと違う切り口にすること。
 
 【介入タイプ】
-- facilitate: 会話を相手側に渡す橋渡し
-- mediate  : 感情が激しい → 裏にある気持ちを一言で
-- clarify  : すれ違いを自然に整理
-- encourage: 歩み寄りをそっと後押し
-- translate: 一方の気持ちをもう一方に届ける
-- reflect  : 一方の言葉を別の角度で言い換える
 
-【nextSpeaker の判断基準】
-優先度1: AIが質問した → 答えていない人を続ける
-優先度2: 「〜だから」「〜なんだ」と話し始めた → その人を続ける
-優先度3: 3回以上連続 → 相手に切り替える
-優先度4: それ以外 → 相手に切り替える
-"user" または "partner" を返す
+* facilitate
+* clarify
+* reflect
+* translate
+* mediate
+* encourage
 
-【出力】JSONのみ：
-{"type":"facilitate","comment":"自然な橋渡しの一言","nextSpeaker":"partner"}`,
-        },
-        ...messages.map((m: any) => ({
-          role: m.role === "assistant" ? "assistant" : "user",
-          content:
-            m.role === "user"
-              ? `【あなた】${m.content}`
-              : m.role === "partner"
-              ? `【パートナー】${m.content}`
-              : `【AI】${m.content}`,
-        })),
-      ],
-      response_format: { type: "json_object" },
-    });
+【nextSpeaker】
 
-    const raw = completion.choices?.[0]?.message?.content?.trim() || "{}";
-    console.log("Couple AI判定:", raw);
+* AIが質問した相手を優先
+* 深掘り中の人を優先
+* 3回以上連続なら切り替え
 
-    let interventionType = "facilitate";
-    let comment = "";
-    let nextSpeaker = humanMessages.slice(-1)[0]?.role === "user" ? "partner" : "user";
+"user"
+または
+"partner"
 
-    try {
-      const parsed = JSON.parse(raw);
-      interventionType = parsed.type || "facilitate";
-      comment = parsed.comment?.trim() || "";
-      if (parsed.nextSpeaker === "user" || parsed.nextSpeaker === "partner") {
-        nextSpeaker = parsed.nextSpeaker;
-      }
-    } catch (e) { console.error(e); }
+【出力】
 
-    if (!comment) {
-      const lastMsg = humanMessages.slice(-1)[0]?.content || "";
-      comment = `「${lastMsg.slice(0, 15)}」について、どんな気持ちがありますか？`;
-    }
+JSONのみ：
 
-    return Response.json({ shouldIntervene: true, interventionType, reply: comment, nextSpeaker });
+{
+"type":"clarify",
+"comment":"自然な短い一言",
+"nextSpeaker":"partner"
+}
+`,
+},
 
-  } catch (error) {
-    console.error(error);
-    return Response.json({ shouldIntervene: false, interventionType: "none", reply: null });
+```
+      ...messages.map((m: any) => ({
+        role:
+          m.role === "assistant"
+            ? "assistant"
+            : "user",
+
+        content:
+          m.role === "user"
+            ? `【あなた】${m.content}`
+            : m.role === "partner"
+            ? `【パートナー】${m.content}`
+            : `【AI】${m.content}`,
+      })),
+    ],
+
+    response_format: {
+      type: "json_object",
+    },
+  });
+
+const raw =
+  completion.choices?.[0]?.message?.content?.trim() ||
+  "{}";
+
+console.log("Couple AI:", raw);
+
+let interventionType = "facilitate";
+let comment = "";
+
+let nextSpeaker =
+  humanMessages.slice(-1)[0]?.role === "user"
+    ? "partner"
+    : "user";
+
+try {
+  const parsed = JSON.parse(raw);
+
+  interventionType =
+    parsed.type || "facilitate";
+
+  comment = parsed.comment?.trim() || "";
+
+  if (
+    parsed.nextSpeaker === "user" ||
+    parsed.nextSpeaker === "partner"
+  ) {
+    nextSpeaker = parsed.nextSpeaker;
   }
+} catch (e) {
+  console.error(e);
+}
+
+return Response.json({
+  shouldIntervene: true,
+  interventionType,
+  reply: comment,
+  nextSpeaker,
+});
+```
+
+} catch (error) {
+console.error(error);
+
+```
+return Response.json({
+  shouldIntervene: false,
+  interventionType: "none",
+  reply: null,
+});
+```
+
+}
 }
