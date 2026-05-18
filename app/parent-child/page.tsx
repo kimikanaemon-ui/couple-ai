@@ -1,7 +1,22 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+
+export default function ParentChildPage() {
+  return (
+    <Suspense fallback={<div style={{ minHeight: "100vh", background: "#FDF9F4" }} />}>
+      <ParentChildPageInner />
+    </Suspense>
+  );
+}
+
+function ParentChildPageInner() {
+  const searchParams = useSearchParams();
+  const preTheme = searchParams.get("theme") || "";
+  const preGoal = searchParams.get("goal") || "";
+  const preConflict = searchParams.get("conflict") || "";
 
 type Role = "parent" | "child" | "assistant";
 type Message = { role: Role; content: string };
@@ -22,7 +37,7 @@ const TYPE_TO_MOOD: Record<string, MoodKey> = {
   mediate: "conflict", clarify: "tension", facilitate: "neutral", encourage: "calm",
 };
 
-export default function ParentChildPage() {
+function ParentChildPageInner() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [emotionScores, setEmotionScores] = useState<EmotionScores | null>(null);
@@ -209,11 +224,18 @@ export default function ParentChildPage() {
       <div style={{flex:1,display:"flex",justifyContent:"center",alignItems:"flex-start",padding:"24px"}}>
         <div style={{width:"100%",maxWidth:560,background:"white",borderRadius:24,border:"0.5px solid #f0e4d0",display:"flex",flexDirection:"column",height:"calc(100vh - 48px)",boxShadow:"0 2px 24px rgba(224,123,42,.06)"}}>
 
-          <div style={{padding:"18px 24px",borderBottom:"0.5px solid #f0e4d0",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-            <span style={{fontFamily:"'DM Serif Display',serif",fontSize:16,color:"#3a2a1a"}}>Family Counseling</span>
-            <span style={{fontSize:11,padding:"3px 12px",borderRadius:20,background:speaker==="parent"?"#FDE8C8":"#D4EAF7",color:speaker==="parent"?"#854F0B":"#0C447C",fontWeight:500}}>
-              {speaker==="parent"?"保護者の番":"お子さんの番"}
-            </span>
+          <div style={{padding:"18px 24px",borderBottom:"0.5px solid #f0e4d0",display:"flex",flexDirection:"column",gap:8}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+              <span style={{fontFamily:"'DM Serif Display',serif",fontSize:16,color:"#3a2a1a"}}>Family Counseling</span>
+              <span style={{fontSize:11,padding:"3px 12px",borderRadius:20,background:speaker==="parent"?"#FDE8C8":"#D4EAF7",color:speaker==="parent"?"#854F0B":"#0C447C",fontWeight:500}}>
+                {speaker==="parent"?"保護者の番":"お子さんの番"}
+              </span>
+            </div>
+            {preGoal && (
+              <div style={{fontSize:11,color:"#5F5E5A",background:"#FDE8C8",borderRadius:10,padding:"6px 12px",display:"flex",alignItems:"center",gap:6}}>
+                <span>🎯</span><span>{preGoal}</span>
+              </div>
+            )}
           </div>
 
           {(emotionScores||keywords.length>0||issues.length>0)&&(

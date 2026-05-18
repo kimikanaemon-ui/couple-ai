@@ -22,6 +22,7 @@ export default function FreePage() {
   const [result, setResult] = useState<TranslationResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [listening, setListening] = useState(false);
+  const [mode, setMode] = useState<"couple" | "family">("couple");
   const recognitionRef = useRef<any>(null);
 
   const startListening = (setter: (v: string) => void, current: string) => {
@@ -223,19 +224,31 @@ export default function FreePage() {
                 </div>
               )}
 
-              {/* ボタン */}
+              {/* モード選択 → 有料版へ */}
               <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 4 }}>
+                <p style={{ fontSize: 13, color: "#7a6070", textAlign: "center", margin: 0 }}>どちらで対話しますか？</p>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button onClick={() => setMode("couple")}
+                    style={{ flex: 1, padding: "12px 0", borderRadius: 16, border: `1.5px solid ${mode === "couple" ? "#D4537E" : "#f0dde6"}`, background: mode === "couple" ? "#FBEAF0" : "white", color: mode === "couple" ? "#993556" : "#b89aab", fontSize: 13, fontWeight: mode === "couple" ? 600 : 400, cursor: "pointer" }}>
+                    💑 カップル
+                  </button>
+                  <button onClick={() => setMode("family")}
+                    style={{ flex: 1, padding: "12px 0", borderRadius: 16, border: `1.5px solid ${mode === "family" ? "#E07B2A" : "#f0e4d0"}`, background: mode === "family" ? "#FDE8C8" : "white", color: mode === "family" ? "#854F0B" : "#c4a882", fontSize: 13, fontWeight: mode === "family" ? 600 : 400, cursor: "pointer" }}>
+                    🌳 親子
+                  </button>
+                </div>
                 <button
                   onClick={() => {
                     const params = new URLSearchParams({
-                      theme: result.sessionTheme,
-                      goal: result.sessionGoal,
-                      conflict: result.coreConflict,
+                      theme: result!.sessionTheme,
+                      goal: result!.sessionGoal,
+                      conflict: result!.coreConflict,
                     });
-                    router.push(`/couple?${params.toString()}`);
+                    const path = mode === "family" ? "/parent-child" : "/couple";
+                    router.push(`${path}?${params.toString()}`);
                   }}
-                  style={{ padding: "14px 0", borderRadius: 16, border: "none", background: "#D4537E", color: "white", fontSize: 14, fontWeight: 500, cursor: "pointer" }}>
-                  二人で対話を始める（有料版）→
+                  style={{ padding: "14px 0", borderRadius: 16, border: "none", background: mode === "couple" ? "#D4537E" : "#E07B2A", color: "white", fontSize: 14, fontWeight: 500, cursor: "pointer" }}>
+                  {mode === "couple" ? "💑 カップル対話を始める" : "🌳 親子対話を始める"} →
                 </button>
                 <button onClick={() => { setStep("user"); setUserDump(""); setPartnerDump(""); setResult(null); }}
                   style={{ padding: "12px 0", borderRadius: 16, border: "0.5px solid #f0dde6", background: "white", color: "#b89aab", fontSize: 13, cursor: "pointer" }}>
