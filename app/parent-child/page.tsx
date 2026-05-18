@@ -226,8 +226,26 @@ function ParentChildPageInner() {
                 {speaker==="parent"?"保護者の番":"お子さんの番"}
               </span>
             </div>
-            {preGoal && (
-              {preTheme && (
+{preGoal && (
+  <div
+    style={{
+      fontSize: 11,
+      color: "#5F5E5A",
+      background: "#FDE8C8",
+      borderRadius: 10,
+      padding: "6px 12px",
+      display: "flex",
+      alignItems: "center",
+      gap: 6,
+      marginBottom: 6,
+    }}
+  >
+    <span>🎯</span>
+    <span>{preGoal}</span>
+  </div>
+)}
+
+{preTheme && (
   <div
     style={{
       fontSize: 11,
@@ -238,10 +256,10 @@ function ParentChildPageInner() {
       display: "flex",
       alignItems: "center",
       gap: 6,
-      marginTop: 6,
+      marginBottom: 6,
     }}
   >
-    <span>🧭</span>
+    <span>💭</span>
     <span>{preTheme}</span>
   </div>
 )}
@@ -250,8 +268,8 @@ function ParentChildPageInner() {
   <div
     style={{
       fontSize: 11,
-      color: "#854F0B",
-      background: "#FFF4E5",
+      color: "#5F5E5A",
+      background: "#FCEBEB",
       borderRadius: 10,
       padding: "6px 12px",
       display: "flex",
