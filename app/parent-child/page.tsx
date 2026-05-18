@@ -14,29 +14,24 @@ export default function ParentChildPage() {
 
 function ParentChildPageInner() {
   const searchParams = useSearchParams();
+
   const preTheme = searchParams.get("theme") || "";
   const preGoal = searchParams.get("goal") || "";
   const preConflict = searchParams.get("conflict") || "";
 
-type Role = "parent" | "child" | "assistant";
-type Message = { role: Role; content: string };
-type PersonScores = { anger: number; sadness: number; anxiety: number; understanding: number };
-type EmotionScores = { parent: PersonScores; child: PersonScores };
-type Session = { id: number; date: string; messages: Message[]; emotions?: EmotionScores; keywords?: string[]; issues?: string[] };
-type MoodKey = "conflict" | "tension" | "neutral" | "calm" | "warm";
-
-const MOODS: Record<MoodKey, { color: string; label: string; sub: string }> = {
-  conflict: { color: "#E24B4A", label: "Conflict",        sub: "Strong emotions present" },
-  tension:  { color: "#E07B2A", label: "Tension",         sub: "Some friction present" },
-  neutral:  { color: "#EF9F27", label: "Neutral",         sub: "Conversation is stable" },
-  calm:     { color: "#639922", label: "Calm",            sub: "Relaxed and open" },
-  warm:     { color: "#97C459", label: "Warm connection", sub: "Trust and connection" },
-};
-
-const TYPE_TO_MOOD: Record<string, MoodKey> = {
-  mediate: "conflict", clarify: "tension", facilitate: "neutral", encourage: "calm",
-};
-
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [sessions, setSessions] = useState<Session[]>([]);
+  const [emotionScores, setEmotionScores] = useState<EmotionScores | null>(null);
+  const [keywords, setKeywords] = useState<string[]>([]);
+  const [issues, setIssues] = useState<string[]>([]);
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [listening, setListening] = useState(false);
+  const [speaker, setSpeaker] = useState<"parent" | "child">("parent");
+  const [interventionType, setInterventionType] = useState<string | null>(null);
+  const [mood, setMood] = useState<MoodKey>("neutral");
+  const [showSessions, setShowSessions] = useState(false);
+  const bottomRef = useRef<HTMLDivElement>(null);
 function ParentChildPageInner() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
@@ -232,6 +227,42 @@ function ParentChildPageInner() {
               </span>
             </div>
             {preGoal && (
+              {preTheme && (
+  <div
+    style={{
+      fontSize: 11,
+      color: "#5F5E5A",
+      background: "#FAEEDA",
+      borderRadius: 10,
+      padding: "6px 12px",
+      display: "flex",
+      alignItems: "center",
+      gap: 6,
+      marginTop: 6,
+    }}
+  >
+    <span>🧭</span>
+    <span>{preTheme}</span>
+  </div>
+)}
+
+{preConflict && (
+  <div
+    style={{
+      fontSize: 11,
+      color: "#854F0B",
+      background: "#FFF4E5",
+      borderRadius: 10,
+      padding: "6px 12px",
+      display: "flex",
+      alignItems: "center",
+      gap: 6,
+    }}
+  >
+    <span>⚡</span>
+    <span>{preConflict}</span>
+  </div>
+)}
               <div style={{fontSize:11,color:"#5F5E5A",background:"#FDE8C8",borderRadius:10,padding:"6px 12px",display:"flex",alignItems:"center",gap:6}}>
                 <span>🎯</span><span>{preGoal}</span>
               </div>
