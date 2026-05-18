@@ -219,68 +219,100 @@ function ParentChildPageInner() {
       <div style={{flex:1,display:"flex",justifyContent:"center",alignItems:"flex-start",padding:"24px"}}>
         <div style={{width:"100%",maxWidth:560,background:"white",borderRadius:24,border:"0.5px solid #f0e4d0",display:"flex",flexDirection:"column",height:"calc(100vh - 48px)",boxShadow:"0 2px 24px rgba(224,123,42,.06)"}}>
 
-          <div style={{padding:"18px 24px",borderBottom:"0.5px solid #f0e4d0",display:"flex",flexDirection:"column",gap:8}}>
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-              <span style={{fontFamily:"'DM Serif Display',serif",fontSize:16,color:"#3a2a1a"}}>Family Counseling</span>
-              <span style={{fontSize:11,padding:"3px 12px",borderRadius:20,background:speaker==="parent"?"#FDE8C8":"#D4EAF7",color:speaker==="parent"?"#854F0B":"#0C447C",fontWeight:500}}>
-                {speaker==="parent"?"保護者の番":"お子さんの番"}
-              </span>
-            </div>
-{preGoal && (
+          <div
+  style={{
+    padding: "18px 24px",
+    borderBottom: "0.5px solid #f0e4d0",
+    display: "flex",
+    flexDirection: "column",
+    gap: 8,
+  }}
+>
   <div
     style={{
-      fontSize: 11,
-      color: "#5F5E5A",
-      background: "#FDE8C8",
-      borderRadius: 10,
-      padding: "6px 12px",
       display: "flex",
       alignItems: "center",
-      gap: 6,
-      marginBottom: 6,
+      justifyContent: "space-between",
     }}
   >
-    <span>🎯</span>
-    <span>{preGoal}</span>
-  </div>
-)}
+    <span
+      style={{
+        fontFamily: "'DM Serif Display',serif",
+        fontSize: 16,
+        color: "#3a2a1a",
+      }}
+    >
+      Family Counseling
+    </span>
 
-{preTheme && (
-  <div
-    style={{
-      fontSize: 11,
-      color: "#5F5E5A",
-      background: "#FAEEDA",
-      borderRadius: 10,
-      padding: "6px 12px",
-      display: "flex",
-      alignItems: "center",
-      gap: 6,
-      marginBottom: 6,
-    }}
-  >
-    <span>💭</span>
-    <span>{preTheme}</span>
+    <span
+      style={{
+        fontSize: 11,
+        padding: "3px 12px",
+        borderRadius: 20,
+        background: speaker === "parent" ? "#FDE8C8" : "#D4EAF7",
+        color: speaker === "parent" ? "#854F0B" : "#0C447C",
+        fontWeight: 500,
+      }}
+    >
+      {speaker === "parent" ? "保護者の番" : "お子さんの番"}
+    </span>
   </div>
-)}
 
-{preConflict && (
-  <div
-    style={{
-      fontSize: 11,
-      color: "#5F5E5A",
-      background: "#FCEBEB",
-      borderRadius: 10,
-      padding: "6px 12px",
-      display: "flex",
-      alignItems: "center",
-      gap: 6,
-    }}
-  >
-    <span>⚡</span>
-    <span>{preConflict}</span>
-  </div>
-)}
+  {preGoal && (
+    <div
+      style={{
+        fontSize: 11,
+        color: "#5F5E5A",
+        background: "#FDE8C8",
+        borderRadius: 10,
+        padding: "6px 12px",
+        display: "flex",
+        alignItems: "center",
+        gap: 6,
+      }}
+    >
+      <span>🎯</span>
+      <span>{preGoal}</span>
+    </div>
+  )}
+
+  {preTheme && (
+    <div
+      style={{
+        fontSize: 11,
+        color: "#5F5E5A",
+        background: "#FAEEDA",
+        borderRadius: 10,
+        padding: "6px 12px",
+        display: "flex",
+        alignItems: "center",
+        gap: 6,
+      }}
+    >
+      <span>💭</span>
+      <span>{preTheme}</span>
+    </div>
+  )}
+
+  {preConflict && (
+    <div
+      style={{
+        fontSize: 11,
+        color: "#5F5E5A",
+        background: "#FCEBEB",
+        borderRadius: 10,
+        padding: "6px 12px",
+        display: "flex",
+        alignItems: "center",
+        gap: 6,
+      }}
+    >
+      <span>⚡</span>
+      <span>{preConflict}</span>
+    </div>
+  )}
+</div>
               <div style={{fontSize:11,color:"#5F5E5A",background:"#FDE8C8",borderRadius:10,padding:"6px 12px",display:"flex",alignItems:"center",gap:6}}>
                 <span>🎯</span><span>{preGoal}</span>
               </div>
