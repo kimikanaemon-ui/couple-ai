@@ -72,6 +72,9 @@ export default function FreePage() {
     r.onerror = () => { setListening(false); recognitionRef.current = null; };
     r.start();
   };
+
+  const handleTranslate = async () => {
+    if (!userDump.trim() || !partnerDump.trim()) return;
     setLoading(true);
     try {
       const res = await fetch("/api/free-dump", {
