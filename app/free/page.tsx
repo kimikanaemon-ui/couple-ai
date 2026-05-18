@@ -12,6 +12,7 @@ type TranslationResult = {
   sessionGoal: string;
   coreConflict: string;
   nextStepHint: string;
+  bridgeMessage: string;
 };
 
 export default function FreePage() {
@@ -221,6 +222,20 @@ export default function FreePage() {
                 <div style={{ background: "linear-gradient(135deg,#EAF3DE,#E6F1FB)", borderRadius: 16, padding: "16px 20px" }}>
                   <div style={{ fontSize: 11, color: "#3B6D11", marginBottom: 8 }}>💡 これから解決できそうなこと</div>
                   <p style={{ fontSize: 13, color: "#2a3a2a", lineHeight: 1.7, margin: 0 }}>{result.nextStepHint}</p>
+                </div>
+              )}
+
+              {/* 感情導線：二人で話すと変わりそう */}
+              {result.bridgeMessage && (
+                <div style={{ background: "white", border: "1.5px solid #D4537E", borderRadius: 18, padding: "18px 20px", textAlign: "center", position: "relative", overflow: "hidden" }}>
+                  <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: "linear-gradient(90deg, #D4537E, #E07B2A)" }} />
+                  <div style={{ fontSize: 20, marginBottom: 8 }}>💬</div>
+                  <p style={{ fontSize: 14, color: "#3a2030", lineHeight: 1.7, margin: "0 0 4px", fontWeight: 500 }}>
+                    {result.bridgeMessage}
+                  </p>
+                  <p style={{ fontSize: 11, color: "#b89aab", margin: 0 }}>
+                    AIが二人の会話をやさしく整理します
+                  </p>
                 </div>
               )}
 
