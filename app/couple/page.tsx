@@ -1,12 +1,8 @@
 "use client";
 
 import { useState, useRef, useEffect, Suspense } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-
-function CouplePageInner() {
-  const searchParams = useSearchParams();
-  const router = useRouter();
 
 type Role = "user" | "partner" | "assistant";
 type Message = { role: Role; content: string };
@@ -37,16 +33,12 @@ export default function CouplePage() {
 
 function CouplePageInner() {
   const searchParams = useSearchParams();
-
-  // 無料版からの引き継ぎデータ
   const preTheme = searchParams.get("theme") || "";
   const preGoal = searchParams.get("goal") || "";
   const preConflict = searchParams.get("conflict") || "";
 
   const [introCompleted, setIntroCompleted] = useState(false);
-  const [introData, setIntroData] = useState({
-    userName: "", partnerName: "", relationship: "", issue: "", theme: preTheme,
-  });
+  const [introData, setIntroData] = useState({ userName: "", partnerName: "", relationship: "", issue: "", theme: preTheme });
   const [messages, setMessages] = useState<Message[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [emotionScores, setEmotionScores] = useState<EmotionScores | null>(null);
@@ -103,10 +95,7 @@ function CouplePageInner() {
   };
 
   const startListening = () => {
-    if (isSpeaking) {
-      window.speechSynthesis.cancel();
-      setIsSpeaking(false);
-    }
+    if (isSpeaking) { window.speechSynthesis.cancel(); setIsSpeaking(false); }
     const SR = (window as any).SpeechRecognition||(window as any).webkitSpeechRecognition;
     if (!SR) { alert("このブラウザは音声入力に対応していません"); return; }
     const r = new SR();
@@ -127,7 +116,6 @@ function CouplePageInner() {
     };
     r.onend = () => { setListening(false); if (silenceTimer) clearTimeout(silenceTimer); };
     r.onerror = () => setListening(false);
-    // 音声合成との競合を避けるため少し遅らせて開始
     window.speechSynthesis.cancel();
     setTimeout(() => r.start(), 300);
   };
@@ -146,7 +134,6 @@ function CouplePageInner() {
         setMessages(p=>[...p,{role:"assistant",content:data.reply}]);
         if (data.interventionType && TYPE_TO_MOOD[data.interventionType]) setMood(TYPE_TO_MOOD[data.interventionType]);
         if (data.nextSpeaker) setSpeaker(data.nextSpeaker as "user" | "partner");
-        // encourageが出たら到達地点に近づいたと判定
         if (data.interventionType === "encourage") setSessionGoalReached(true);
         speak(data.reply, data.interventionType==="mediate"||data.interventionType==="clarify"?"tense":"calm");
       } else {
@@ -166,18 +153,9 @@ function CouplePageInner() {
       const final: Message[] = [...messages, { role:"assistant", content:"【セッションまとめ】\n\n"+data.reply }];
       setMessages(final);
       setSessions(p=>[{id:Date.now(),date:new Date().toLocaleString(),messages:final,emotions:data.emotions,keywords:data.keywords,issues:data.issues},...p]);
-
-      // Supabase に保存（ログイン済みの場合のみ）
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
-        await supabase.from("sessions").insert({
-          user_id: session.user.id,
-          type: "couple",
-          messages: final,
-          emotions: data.emotions,
-          keywords: data.keywords,
-          issues: data.issues,
-        });
+        await supabase.from("sessions").insert({ user_id: session.user.id, type:"couple", messages:final, emotions:data.emotions, keywords:data.keywords, issues:data.issues });
       }
     } catch(e){ console.error(e); } finally { setLoading(false); }
   };
@@ -201,39 +179,26 @@ function CouplePageInner() {
     fontFamily: "inherit", outline: "none" as const, width: "100%",
   };
 
-  // イントロ画面
   if (!introCompleted) {
     return (
-      <main style={{ minHeight: "100vh", background: "#FDF6F9", display: "flex", justifyContent: "center", alignItems: "center", padding: 24, fontFamily: "'DM Sans',sans-serif" }}>
+      <main style={{ minHeight:"100vh", background:"#FDF6F9", display:"flex", justifyContent:"center", alignItems:"center", padding:24, fontFamily:"'DM Sans',sans-serif" }}>
         <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500&family=DM+Serif+Display:ital@0;1&display=swap'); input:focus,textarea:focus{outline:none}`}</style>
-        <div style={{ width: "100%", maxWidth: 480, background: "white", borderRadius: 24, padding: 32, border: "0.5px solid #f0dde6", display: "flex", flexDirection: "column", gap: 14, boxShadow: "0 4px 24px rgba(212,83,126,.08)" }}>
-          <h1 style={{ fontFamily: "'DM Serif Display',serif", fontSize: 24, color: "#3a2030", marginBottom: 4 }}>Couple Counseling</h1>
-          <p style={{ fontSize: 13, color: "#b89aab", lineHeight: 1.6, margin: 0 }}>
-            最初に、今のお二人について少しだけ教えてください。
-          </p>
-
-          {/* 無料版からの引き継ぎ */}
+        <div style={{ width:"100%", maxWidth:480, background:"white", borderRadius:24, padding:32, border:"0.5px solid #f0dde6", display:"flex", flexDirection:"column", gap:14, boxShadow:"0 4px 24px rgba(212,83,126,.08)" }}>
+          <h1 style={{ fontFamily:"'DM Serif Display',serif", fontSize:24, color:"#3a2030", marginBottom:4 }}>Couple Counseling</h1>
+          <p style={{ fontSize:13, color:"#b89aab", lineHeight:1.6, margin:0 }}>最初に、今のお二人について少しだけ教えてください。</p>
           {preConflict && (
-            <div style={{ background: "linear-gradient(135deg,#FBEAF0,#E6F1FB)", borderRadius: 14, padding: "14px 16px" }}>
-              <div style={{ fontSize: 11, color: "#993556", marginBottom: 6 }}>💬 翻訳結果より</div>
-              <div style={{ fontSize: 13, fontWeight: 500, color: "#3a2030", marginBottom: 4 }}>{preConflict}</div>
-              {preGoal && <div style={{ fontSize: 12, color: "#7a6070" }}>目標：{preGoal}</div>}
+            <div style={{ background:"linear-gradient(135deg,#FBEAF0,#E6F1FB)", borderRadius:14, padding:"14px 16px" }}>
+              <div style={{ fontSize:11, color:"#993556", marginBottom:6 }}>💬 翻訳結果より</div>
+              <div style={{ fontSize:13, fontWeight:500, color:"#3a2030", marginBottom:4 }}>{preConflict}</div>
+              {preGoal && <div style={{ fontSize:12, color:"#7a6070" }}>目標：{preGoal}</div>}
             </div>
           )}
-          <input placeholder="あなたの名前" value={introData.userName}
-            onChange={e => setIntroData({...introData, userName: e.target.value})} style={inputStyle} />
-          <input placeholder="パートナーの名前" value={introData.partnerName}
-            onChange={e => setIntroData({...introData, partnerName: e.target.value})} style={inputStyle} />
-          <input placeholder="関係性（恋人・夫婦など）" value={introData.relationship}
-            onChange={e => setIntroData({...introData, relationship: e.target.value})} style={inputStyle} />
-          <textarea placeholder="今一番困っていること" rows={3} value={introData.issue}
-            onChange={e => setIntroData({...introData, issue: e.target.value})} style={textareaStyle} />
-          <textarea placeholder="今日話したいテーマ" rows={2} value={introData.theme}
-            onChange={e => setIntroData({...introData, theme: e.target.value})} style={textareaStyle} />
-          <button onClick={() => setIntroCompleted(true)}
-            style={{ marginTop: 8, border: "none", background: "#D4537E", color: "white", padding: "14px 0", borderRadius: 16, fontSize: 14, cursor: "pointer", fontWeight: 500 }}>
-            会話を始める
-          </button>
+          <input placeholder="あなたの名前" value={introData.userName} onChange={e=>setIntroData({...introData,userName:e.target.value})} style={inputStyle}/>
+          <input placeholder="パートナーの名前" value={introData.partnerName} onChange={e=>setIntroData({...introData,partnerName:e.target.value})} style={inputStyle}/>
+          <input placeholder="関係性（恋人・夫婦など）" value={introData.relationship} onChange={e=>setIntroData({...introData,relationship:e.target.value})} style={inputStyle}/>
+          <textarea placeholder="今一番困っていること" rows={3} value={introData.issue} onChange={e=>setIntroData({...introData,issue:e.target.value})} style={textareaStyle}/>
+          <textarea placeholder="今日話したいテーマ" rows={2} value={introData.theme} onChange={e=>setIntroData({...introData,theme:e.target.value})} style={textareaStyle}/>
+          <button onClick={()=>setIntroCompleted(true)} style={{ marginTop:8, border:"none", background:"#D4537E", color:"white", padding:"14px 0", borderRadius:16, fontSize:14, cursor:"pointer", fontWeight:500 }}>会話を始める</button>
         </div>
       </main>
     );
@@ -257,7 +222,6 @@ function CouplePageInner() {
       {/* 左パネル */}
       <div style={{width:200,background:"white",borderRight:"0.5px solid #f0dde6",display:"flex",flexDirection:"column",alignItems:"center",padding:"28px 16px",gap:18,position:"sticky",top:0,height:"100vh"}}>
         <span style={{fontSize:10,color:"#b89aab",letterSpacing:".1em",textTransform:"uppercase",textAlign:"center"}}>Relationship<br/>atmosphere</span>
-
         <div style={{position:"relative",width:110,height:110,display:"flex",alignItems:"center",justifyContent:"center"}}>
           <div className="hr" style={{position:"absolute",width:110,height:110,borderRadius:"50%",background:cm.color}}/>
           <svg className="hsv" width="72" height="66" viewBox="0 0 72 66" fill="none" style={{position:"relative",zIndex:1,filter:`drop-shadow(0 4px 18px ${cm.color}66)`}}>
@@ -265,21 +229,16 @@ function CouplePageInner() {
             <path d="M22 14c-3 0-6 2-8 5" stroke="white" strokeWidth="2.5" strokeLinecap="round" opacity=".45"/>
           </svg>
         </div>
-
         <div style={{textAlign:"center"}}>
           <div style={{fontSize:13,fontWeight:500,color:"#3a2030"}}>{cm.label}</div>
           <div style={{fontSize:11,color:"#b89aab",marginTop:2}}>{cm.sub}</div>
         </div>
-
         <div style={{display:"flex",gap:6}}>
           {(Object.entries(MOODS) as [MoodKey,typeof MOODS[MoodKey]][]).map(([key,m])=>(
-            <div key={key} onClick={()=>setMood(key)} title={m.label}
-              style={{width:9,height:9,borderRadius:"50%",background:m.color,cursor:"pointer",outline:mood===key?`2px solid ${m.color}`:"none",outlineOffset:2}}/>
+            <div key={key} onClick={()=>setMood(key)} title={m.label} style={{width:9,height:9,borderRadius:"50%",background:m.color,cursor:"pointer",outline:mood===key?`2px solid ${m.color}`:"none",outlineOffset:2}}/>
           ))}
         </div>
-
         <div style={{width:"100%",height:"0.5px",background:"#f0dde6"}}/>
-
         <div style={{width:"100%",display:"flex",flexDirection:"column",gap:10}}>
           {[{i:"A",l:"あなた",bg:"#FBEAF0",c:"#993556"},{i:"P",l:"パートナー",bg:"#E6F1FB",c:"#185FA5"},{i:"AI",l:"Counselor AI",bg:"#EAF3DE",c:"#27500A"}].map(p=>(
             <div key={p.l} style={{display:"flex",alignItems:"center",gap:8}}>
@@ -289,10 +248,9 @@ function CouplePageInner() {
             </div>
           ))}
         </div>
-
         <div style={{width:"100%",height:"0.5px",background:"#f0dde6"}}/>
         <button onClick={()=>setShowSessions(v=>!v)} style={{width:"100%",padding:"7px 0",borderRadius:20,border:"0.5px solid #f0dde6",background:"white",fontSize:11,color:"#b89aab",cursor:"pointer"}}>履歴 {sessions.length>0&&`(${sessions.length})`}</button>
-        <button onClick={()=>{setMessages([]);setEmotionScores(null);setKeywords([]);setIssues([]);setSpeaker("user");setMood("neutral");}} style={{width:"100%",padding:"7px 0",borderRadius:20,border:"none",background:cm.color,color:"white",fontSize:11,fontWeight:500,cursor:"pointer"}}>新規セッション</button>
+        <button onClick={()=>{setMessages([]);setEmotionScores(null);setKeywords([]);setIssues([]);setSpeaker("user");setMood("neutral");setSessionGoalReached(false);}} style={{width:"100%",padding:"7px 0",borderRadius:20,border:"none",background:cm.color,color:"white",fontSize:11,fontWeight:500,cursor:"pointer"}}>新規セッション</button>
       </div>
 
       {/* 履歴 */}
@@ -324,8 +282,7 @@ function CouplePageInner() {
             </div>
             {preGoal && (
               <div style={{fontSize:11,color:"#5F5E5A",background:"#F1EFE8",borderRadius:10,padding:"6px 12px",display:"flex",alignItems:"center",gap:6}}>
-                <span>🎯</span>
-                <span>{preGoal}</span>
+                <span>🎯</span><span>{preGoal}</span>
                 {sessionGoalReached && <span style={{marginLeft:"auto",color:"#3B6D11",fontWeight:500}}>✨ 到達</span>}
               </div>
             )}
