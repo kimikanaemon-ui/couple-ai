@@ -346,22 +346,109 @@ function ParentChildPageInner() {
 
           <div style={{flex:1,overflowY:"auto",padding:"20px",display:"flex",flexDirection:"column",gap:14}}>
             {messages.length===0&&<div style={{textAlign:"center",color:"#d8cfc4",fontSize:13,marginTop:40}}>まず「保護者」から気持ちを書いてください</div>}
-            {messages.map((m,i)=>{
-              if(m.role==="assistant"){
-                const t=interventionType&&i===messages.length-1&&ts[interventionType]?ts[interventionType]:{icon:"💭",bg:"#F1EFE8",text:"#5F5E5A",border:"#D3D1C7"};
-                return(<div key={i} className="fi" style={{display:"flex",justifyContent:"center"}}><div style={{maxWidth:"85%",padding:"10px 16px",borderRadius:14,border:`0.5px solid ${t.border}`,background:t.bg,color:t.text,fontSize:12,fontStyle:"italic",textAlign:"center",lineHeight:1.6}}>{t.icon} {m.content}</div></div>);
-              }
-              const isParent=m.role==="parent";
-              return(
-                <div key={i} className="fi" style={{display:"flex",flexDirection:isParent?"row":"row-reverse",gap:10,alignItems:"flex-end"}}>
-                  <div style={{width:26,height:26,borderRadius:"50%",background:isParent?"#FDE8C8":"#D4EAF7",color:isParent?"#854F0B":"#0C447C",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:500,flexShrink:0}}>{isParent?"親":"子"}</div>
-                  <div>
-                    <div style={{fontSize:10,color:"#c4a882",marginBottom:3,textAlign:isParent?"left":"right"}}>{isParent?"保護者":"お子さん"}</div>
-                    <div style={{maxWidth:260,padding:"10px 14px",borderRadius:16,borderBottomLeftRadius:isParent?4:16,borderBottomRightRadius:isParent?16:4,background:isParent?"#FDE8C8":"#D4EAF7",color:isParent?"#5C3205":"#063450",fontSize:13,lineHeight:1.6,whiteSpace:"pre-wrap"}}>{m.content}</div>
-                  </div>
-                </div>
-              );
-            })}
+            {messages.map((m, i) => {
+  if (m.role === "assistant") {
+    const t =
+      interventionType &&
+      i === messages.length - 1 &&
+      ts[interventionType]
+        ? ts[interventionType]
+        : {
+            icon: "💭",
+            bg: "#F1EFE8",
+            text: "#5F5E5A",
+            border: "#D3D1C7",
+          };
+
+    return (
+      <div
+        key={i}
+        className="fi"
+        style={{ display: "flex", justifyContent: "center" }}
+      >
+        <div
+          style={{
+            maxWidth: "85%",
+            padding: "10px 16px",
+            borderRadius: 14,
+            border: `0.5px solid ${t.border}`,
+            background: t.bg,
+            color: t.text,
+            fontSize: 12,
+            fontStyle: "italic",
+            textAlign: "center",
+            lineHeight: 1.6,
+          }}
+        >
+          {t.icon} {m.content}
+        </div>
+      </div>
+    );
+  }
+
+  const isParent = m.role === "parent";
+
+  return (
+    <div
+      key={i}
+      className="fi"
+      style={{
+        display: "flex",
+        flexDirection: isParent ? "row" : "row-reverse",
+        gap: 10,
+        alignItems: "flex-end",
+      }}
+    >
+      <div
+        style={{
+          width: 26,
+          height: 26,
+          borderRadius: "50%",
+          background: isParent ? "#FDE8C8" : "#D4EAF7",
+          color: isParent ? "#854F0B" : "#0C447C",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontSize: 10,
+          fontWeight: 500,
+          flexShrink: 0,
+        }}
+      >
+        {isParent ? "親" : "子"}
+      </div>
+
+      <div>
+        <div
+          style={{
+            fontSize: 10,
+            color: "#c4a882",
+            marginBottom: 3,
+            textAlign: isParent ? "left" : "right",
+          }}
+        >
+          {isParent ? "保護者" : "お子さん"}
+        </div>
+
+        <div
+          style={{
+            maxWidth: 260,
+            padding: "10px 14px",
+            borderRadius: 16,
+            borderBottomLeftRadius: isParent ? 4 : 16,
+            borderBottomRightRadius: isParent ? 16 : 4,
+            background: isParent ? "#FDE8C8" : "#D4EAF7",
+            color: isParent ? "#5C3205" : "#063450",
+            fontSize: 13,
+            lineHeight: 1.6,
+            whiteSpace: "pre-wrap",
+          }}
+        >
+          {m.content}
+        </div>
+      </div>
+    </div>
+  );
+})}
             {loading&&<div style={{display:"flex",justifyContent:"center"}}><div style={{padding:"8px 18px",borderRadius:12,background:"#FDF0E0",fontSize:11,color:"#c4a882"}}>AIが判断中…</div></div>}
             <div ref={bottomRef}/>
           </div>
