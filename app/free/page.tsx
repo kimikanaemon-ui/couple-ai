@@ -1,283 +1,180 @@
-"use client";
+import OpenAI from "openai";
 
-import { useState, useRef } from "react";
-import { useRouter } from "next/navigation";
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-type Step = "user" | "partner" | "result";
-
-type TranslationResult = {
-  translatedUserFeelings: string;
-  translatedPartnerFeelings: string;
-  sessionTheme: string;
-  sessionGoal: string;
-  coreConflict: string;
-  nextStepHint: string;
-  bridgeMessage: string;
+const parseJson = (text: string, key: string): any => {
+  const start = text.indexOf(`${key}:`);
+  if (start === -1) return null;
+  const rest = text.slice(start + key.length + 1).trim();
+  const opener = rest[0];
+  const closer = opener === "{" ? "}" : "]";
+  let depth = 0, end = -1;
+  for (let i = 0; i < rest.length; i++) {
+    if (rest[i] === opener) depth++;
+    else if (rest[i] === closer) { depth--; if (depth === 0) { end = i; break; } }
+  }
+  if (end === -1) return null;
+  try { return JSON.parse(rest.slice(0, end + 1)); } catch { return null; }
 };
 
-export default function FreePage() {
-  const router = useRouter();
-  const [step, setStep] = useState<Step>("user");
-  const [userDump, setUserDump] = useState("");
-  const [partnerDump, setPartnerDump] = useState("");
-  const [result, setResult] = useState<TranslationResult | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [listening, setListening] = useState(false);
-  const [mode, setMode] = useState<"couple" | "family">("couple");
-  const recognitionRef = useRef<any>(null);
+export async function POST(req: Request) {
+  try {
+    const body = await req.json();
+    const messages = body.messages || [];
+    const isEndSession = body.isEndSession || false;
 
-  const startListening = (setter: (v: string) => void, current: string) => {
-    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SR) { alert("このブラウザは音声入力に対応していません"); return; }
+    if (isEndSession) {
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [
+          {
+            role: "system",
+            content: `あなたは優しく冷静な家族カウンセラーです。
+ここまでの親子の会話をカウンセリング視点で短くまとめてください。
 
-    // 既に動いていれば停止
-    if (recognitionRef.current) {
-      recognitionRef.current.stop();
-      recognitionRef.current = null;
-      setListening(false);
-      return;
-    }
+まとめの末尾に必ず以下の形式でデータを付けてください（1行ずつ）：
 
-    const r = new SR();
-    r.lang = "ja-JP";
-    r.continuous = true;
-    r.interimResults = true;
-    recognitionRef.current = r;
-
-    let committed = current; // 確定済みテキストを保持
-    let silenceTimer: ReturnType<typeof setTimeout> | null = null;
-
-    r.onstart = () => setListening(true);
-
-    r.onresult = (e: any) => {
-      let interim = "";
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        const t = e.results[i][0].transcript;
-        if (e.results[i].isFinal) {
-          committed += t;
-        } else {
-          interim = t;
-        }
-      }
-      setter(committed + interim);
-      if (silenceTimer) clearTimeout(silenceTimer);
-      silenceTimer = setTimeout(() => r.stop(), 20000);
-    };
-
-    r.onend = () => {
-      setListening(false);
-      recognitionRef.current = null;
-      if (silenceTimer) clearTimeout(silenceTimer);
-      setter(committed);
-    };
-
-    r.onerror = () => { setListening(false); recognitionRef.current = null; };
-    r.start();
-  };
-
-  const handleTranslate = async () => {
-    if (!userDump.trim() || !partnerDump.trim()) return;
-    setLoading(true);
-    try {
-      const res = await fetch("/api/free-dump", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userDump, partnerDump }),
+EMOTIONS_JSON:{"parent":{"anger":0,"sadness":0,"anxiety":0,"understanding":0},"child":{"anger":0,"sadness":0,"anxiety":0,"understanding":0}}
+KEYWORDS_JSON:["キーワード1","キーワード2","キーワード3"]
+ISSUES_JSON:["争点1","争点2"]`,
+          },
+          ...messages.map((m: any) => ({
+            role: m.role === "assistant" ? "assistant" : "user",
+            content: `[${m.role}]: ${m.content}`,
+          })),
+        ],
       });
-      const data = await res.json();
-      setResult(data);
-      setStep("result");
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoading(false);
+      const raw = completion.choices?.[0]?.message?.content || "";
+      const emotions = parseJson(raw, "EMOTIONS_JSON");
+      const keywords = parseJson(raw, "KEYWORDS_JSON");
+      const issues = parseJson(raw, "ISSUES_JSON");
+      const reply = raw.replace(/EMOTIONS_JSON:[\s\S]+$/, "").trim();
+      return Response.json({ reply, emotions, keywords, issues });
     }
-  };
 
-  const inputStyle = {
-    width: "100%", border: "0.5px solid #f0dde6", borderRadius: 14,
-    padding: "12px 14px", fontSize: 14, fontFamily: "inherit",
-    resize: "none" as const, outline: "none" as const,
-    background: "white", color: "#3a2030", lineHeight: 1.6,
-  };
+    const humanMessages = messages.filter((m: any) => m.role !== "assistant");
+    const humanCount = humanMessages.length;
 
-  return (
-    <main style={{ minHeight: "100vh", background: "linear-gradient(135deg, #FDF6F9 0%, #F4F9FF 100%)", display: "flex", justifyContent: "center", alignItems: "flex-start", padding: "40px 24px", fontFamily: "'DM Sans',sans-serif" }}>
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500&family=DM+Serif+Display:ital@0;1&display=swap'); * { box-sizing: border-box; } textarea:focus,input:focus{outline:none}`}</style>
+    if (humanCount <= 1) {
+      return Response.json({ shouldIntervene: false, interventionType: "none", reply: null });
+    }
 
-      <div style={{ width: "100%", maxWidth: 520 }}>
+    const lastSpeaker = humanMessages.slice(-1)[0]?.role;
+    const defaultNext = lastSpeaker === "parent" ? "child" : "parent";
 
-        {/* ヘッダー */}
-        <div style={{ textAlign: "center", marginBottom: 32 }}>
-          <div style={{ fontSize: 32, marginBottom: 8 }}>💬</div>
-          <h1 style={{ fontFamily: "'DM Serif Display',serif", fontSize: 22, color: "#3a2030", margin: 0 }}>気持ちを翻訳する</h1>
-          <p style={{ fontSize: 13, color: "#b89aab", marginTop: 8 }}>まずそれぞれが本音を書いてください。AIが翻訳します。</p>
-        </div>
+    // 直前のAIコメントを取得（繰り返し防止）
+    const lastAIComment = messages.filter((m: any) => m.role === "assistant").slice(-1)[0]?.content || "";
 
-        {/* ステップインジケーター */}
-        <div style={{ display: "flex", justifyContent: "center", gap: 8, marginBottom: 28 }}>
-          {(["user","partner","result"] as Step[]).map((s, i) => (
-            <div key={s} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <div style={{ width: 28, height: 28, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 500, background: step === s ? "#D4537E" : ["user","partner","result"].indexOf(step) > i ? "#EAF3DE" : "#f5eef2", color: step === s ? "white" : ["user","partner","result"].indexOf(step) > i ? "#3B6D11" : "#b89aab" }}>
-                {["user","partner","result"].indexOf(step) > i ? "✓" : i + 1}
-              </div>
-              {i < 2 && <div style={{ width: 24, height: 1, background: "#f0dde6" }} />}
-            </div>
-          ))}
-        </div>
+    // 会話フェーズ判定
+    const phase = humanCount <= 4 ? "序盤" : humanCount <= 8 ? "中盤" : "終盤";
 
-        <div style={{ background: "white", borderRadius: 24, border: "0.5px solid #f0dde6", padding: 28, boxShadow: "0 4px 24px rgba(212,83,126,.06)" }}>
+    // 発言回数集計
+    const parentCount = humanMessages.filter((m: any) => m.role === "parent").length;
+    const childCount = humanMessages.filter((m: any) => m.role === "child").length;
 
-          {/* Step 1: あなた */}
-          {step === "user" && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-              <div>
-                <div style={{ fontSize: 11, color: "#b89aab", marginBottom: 6, letterSpacing: ".05em", textTransform: "uppercase" }}>Step 1</div>
-                <h2 style={{ fontSize: 17, color: "#3a2030", margin: 0 }}>あなたの本音を書いてください</h2>
-                <p style={{ fontSize: 12, color: "#b89aab", marginTop: 6 }}>相手には見せません。思ったままで大丈夫です。</p>
-              </div>
-              <div style={{ position: "relative" }}>
-                <textarea placeholder="モヤモヤしていること、言えなかったこと、怒り、悲しみ…なんでも。" rows={8} value={userDump} onChange={e => setUserDump(e.target.value)} style={{...inputStyle, paddingRight: 48}} />
-                <button onClick={() => startListening(setUserDump, userDump)}
-                  style={{ position: "absolute", bottom: 10, right: 10, width: 32, height: 32, borderRadius: "50%", border: "none", background: listening ? "#E24B4A" : "#f5eef2", color: listening ? "white" : "#b89aab", fontSize: 14, cursor: "pointer" }}>
-                  {listening ? "⏹" : "🎤"}
-                </button>
-              </div>
-              <button onClick={() => setStep("partner")} disabled={!userDump.trim()}
-                style={{ padding: "14px 0", borderRadius: 16, border: "none", background: userDump.trim() ? "#D4537E" : "#f5eef2", color: userDump.trim() ? "white" : "#d0c0cc", fontSize: 14, fontWeight: 500, cursor: userDump.trim() ? "pointer" : "default" }}>
-                次へ →
-              </button>
-            </div>
-          )}
+    // 連続発言数（同じ人が何回連続して話しているか）
+    let consecutiveCount = 0;
+    for (let i = humanMessages.length - 1; i >= 0; i--) {
+      if (humanMessages[i].role === lastSpeaker) consecutiveCount++;
+      else break;
+    }
+    // 2回以上連続なら強制的に相手へ切り替え
+    const forceSwitch = consecutiveCount >= 2;
 
-          {/* Step 2: 相手 */}
-          {step === "partner" && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-              <div>
-                <div style={{ fontSize: 11, color: "#b89aab", marginBottom: 6, letterSpacing: ".05em", textTransform: "uppercase" }}>Step 2</div>
-                <h2 style={{ fontSize: 17, color: "#3a2030", margin: 0 }}>相手の本音を書いてください</h2>
-                <p style={{ fontSize: 12, color: "#b89aab", marginTop: 6 }}>相手本人が入力するか、代わりに書いてください。</p>
-              </div>
-              <div style={{ position: "relative" }}>
-                <textarea placeholder="相手の立場から…" rows={8} value={partnerDump} onChange={e => setPartnerDump(e.target.value)} style={{...inputStyle, paddingRight: 48}} />
-                <button onClick={() => startListening(setPartnerDump, partnerDump)}
-                  style={{ position: "absolute", bottom: 10, right: 10, width: 32, height: 32, borderRadius: "50%", border: "none", background: listening ? "#E24B4A" : "#f5eef2", color: listening ? "white" : "#b89aab", fontSize: 14, cursor: "pointer" }}>
-                  {listening ? "⏹" : "🎤"}
-                </button>
-              </div>
-              <div style={{ display: "flex", gap: 10 }}>
-                <button onClick={() => setStep("user")}
-                  style={{ flex: 1, padding: "14px 0", borderRadius: 16, border: "0.5px solid #f0dde6", background: "white", color: "#b89aab", fontSize: 14, cursor: "pointer" }}>
-                  ← 戻る
-                </button>
-                <button onClick={handleTranslate} disabled={!partnerDump.trim() || loading}
-                  style={{ flex: 2, padding: "14px 0", borderRadius: 16, border: "none", background: partnerDump.trim() && !loading ? "#D4537E" : "#f5eef2", color: partnerDump.trim() && !loading ? "white" : "#d0c0cc", fontSize: 14, fontWeight: 500, cursor: partnerDump.trim() && !loading ? "pointer" : "default" }}>
-                  {loading ? "翻訳中…" : "翻訳する ✨"}
-                </button>
-              </div>
-            </div>
-          )}
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: "system",
+          content: `あなたは親子カウンセリングの進行役AIです。
+以下の会話を注意深く読み、カウンセラーとして介入してください。
 
-          {/* Step 3: 結果 */}
-          {step === "result" && result && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-              <div style={{ textAlign: "center" }}>
-                <div style={{ fontSize: 11, color: "#b89aab", marginBottom: 6, letterSpacing: ".05em", textTransform: "uppercase" }}>翻訳結果</div>
-                <h2 style={{ fontSize: 17, color: "#3a2030", margin: 0 }}>今二人の間で起きていること</h2>
-              </div>
+【現在のフェーズ】${phase}
+【発言回数】保護者：${parentCount}回 / お子さん：${childCount}回
+【直前の話者】${lastSpeaker === "parent" ? "保護者" : "お子さん"}（${consecutiveCount}回連続）
+【直前のAIコメント】「${lastAIComment}」← これと同じ内容・表現を絶対に繰り返さない
+${forceSwitch ? "【重要】同じ人が2回以上連続で話しているので、必ず相手に切り替えること" : ""}
 
-              {/* コアコンフリクト */}
-              <div style={{ background: "linear-gradient(135deg,#FBEAF0,#E6F1FB)", borderRadius: 16, padding: "16px 20px", textAlign: "center" }}>
-                <div style={{ fontSize: 11, color: "#993556", marginBottom: 6 }}>核心</div>
-                <div style={{ fontSize: 15, fontWeight: 500, color: "#3a2030" }}>{result.coreConflict}</div>
-              </div>
+【絶対に守るルール】
+- 直前のAIコメントと異なるアプローチで介入する
+- 「お互いの意見を」「もう少し詳しく」などの汎用表現禁止
+- 会話に出た具体的な言葉（スマホ・ゲーム・ルール等）を必ず使う
 
-              {/* あなたの翻訳 */}
-              <div style={{ background: "#FBEAF0", borderRadius: 16, padding: "16px 20px" }}>
-                <div style={{ fontSize: 11, color: "#993556", marginBottom: 8 }}>💗 あなたの本当の気持ち</div>
-                <p style={{ fontSize: 13, color: "#4B1528", lineHeight: 1.7, margin: 0 }}>{result.translatedUserFeelings}</p>
-              </div>
+【フェーズ別アプローチ】
+- 序盤: それぞれの状況・背景を引き出す質問
+- 中盤: 感情の根本・本当に伝えたいことを掘り下げる
+- 終盤: 歩み寄りや具体的な解決策を促す
 
-              {/* 相手の翻訳 */}
-              <div style={{ background: "#E6F1FB", borderRadius: 16, padding: "16px 20px" }}>
-                <div style={{ fontSize: 11, color: "#185FA5", marginBottom: 8 }}>💙 相手の本当の気持ち</div>
-                <p style={{ fontSize: 13, color: "#042C53", lineHeight: 1.7, margin: 0 }}>{result.translatedPartnerFeelings}</p>
-              </div>
+【介入タイプ】
+- mediate  : 怒り・責め・強い対立 → 感情を言語化させる
+- clarify  : すれ違い・誤解・堂々巡り → 何が本質的な問題か整理
+- facilitate: 返答が短い・止まっている → 安心して話せる質問
+- encourage: 歩み寄りの言葉がある → その気持ちをさらに深める
 
-              {/* テーマ・ゴール */}
-              <div style={{ background: "#F1EFE8", borderRadius: 16, padding: "16px 20px", display: "flex", flexDirection: "column", gap: 10 }}>
-                <div>
-                  <div style={{ fontSize: 11, color: "#5F5E5A", marginBottom: 4 }}>📌 今日のテーマ</div>
-                  <div style={{ fontSize: 14, fontWeight: 500, color: "#3a2030" }}>{result.sessionTheme}</div>
-                </div>
-                <div style={{ height: "0.5px", background: "#d8d5cc" }} />
-                <div>
-                  <div style={{ fontSize: 11, color: "#5F5E5A", marginBottom: 4 }}>🎯 目指せること</div>
-                  <div style={{ fontSize: 14, color: "#3a2030" }}>{result.sessionGoal}</div>
-                </div>
-              </div>
+【コメント作成】
+- 会話の具体的な内容を必ず反映する
+- 30〜60文字・質問は一つだけ・自然な話し言葉
 
-              {/* 次のステップヒント */}
-              {result.nextStepHint && (
-                <div style={{ background: "linear-gradient(135deg,#EAF3DE,#E6F1FB)", borderRadius: 16, padding: "16px 20px" }}>
-                  <div style={{ fontSize: 11, color: "#3B6D11", marginBottom: 8 }}>💡 これから解決できそうなこと</div>
-                  <p style={{ fontSize: 13, color: "#2a3a2a", lineHeight: 1.7, margin: 0 }}>{result.nextStepHint}</p>
-                </div>
-              )}
+【nextSpeaker の判断基準（最重要）】
+以下の優先順位で判断する：
 
-              {/* 感情導線：二人で話すと変わりそう */}
-              {result.bridgeMessage && (
-                <div style={{ background: "white", border: "1.5px solid #D4537E", borderRadius: 18, padding: "18px 20px", textAlign: "center", position: "relative", overflow: "hidden" }}>
-                  <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: "linear-gradient(90deg, #D4537E, #E07B2A)" }} />
-                  <div style={{ fontSize: 20, marginBottom: 8 }}>💬</div>
-                  <p style={{ fontSize: 14, color: "#3a2030", lineHeight: 1.7, margin: "0 0 4px", fontWeight: 500 }}>
-                    {result.bridgeMessage}
-                  </p>
-                  <p style={{ fontSize: 11, color: "#b89aab", margin: 0 }}>
-                    AIが二人の会話をやさしく整理します
-                  </p>
-                </div>
-              )}
+優先度1【AIの質問に未回答】
+- 直前のAIコメントが質問形式で、その質問に答えていない場合
+- → 答えていない人を nextSpeaker にする（絶対に切り替えない）
 
-              {/* モード選択 → 有料版へ */}
-              <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 4 }}>
-                <p style={{ fontSize: 13, color: "#7a6070", textAlign: "center", margin: 0 }}>どちらで対話しますか？</p>
-                <div style={{ display: "flex", gap: 8 }}>
-                  <button onClick={() => setMode("couple")}
-                    style={{ flex: 1, padding: "12px 0", borderRadius: 16, border: `1.5px solid ${mode === "couple" ? "#D4537E" : "#f0dde6"}`, background: mode === "couple" ? "#FBEAF0" : "white", color: mode === "couple" ? "#993556" : "#b89aab", fontSize: 13, fontWeight: mode === "couple" ? 600 : 400, cursor: "pointer" }}>
-                    💑 カップル
-                  </button>
-                  <button onClick={() => setMode("family")}
-                    style={{ flex: 1, padding: "12px 0", borderRadius: 16, border: `1.5px solid ${mode === "family" ? "#E07B2A" : "#f0e4d0"}`, background: mode === "family" ? "#FDE8C8" : "white", color: mode === "family" ? "#854F0B" : "#c4a882", fontSize: 13, fontWeight: mode === "family" ? 600 : 400, cursor: "pointer" }}>
-                    🌳 親子
-                  </button>
-                </div>
-                <button
-                  onClick={() => {
-                    const params = new URLSearchParams({
-                      theme: result!.sessionTheme,
-                      goal: result!.sessionGoal,
-                      conflict: result!.coreConflict,
-                    });
-                    const path = mode === "family" ? "/parent-child" : "/couple";
-                    router.push(`${path}?${params.toString()}`);
-                  }}
-                  style={{ padding: "14px 0", borderRadius: 16, border: "none", background: mode === "couple" ? "#D4537E" : "#E07B2A", color: "white", fontSize: 14, fontWeight: 500, cursor: "pointer" }}>
-                  {mode === "couple" ? "💑 カップル対話を始める" : "🌳 親子対話を始める"} →
-                </button>
-                <button onClick={() => { setStep("user"); setUserDump(""); setPartnerDump(""); setResult(null); }}
-                  style={{ padding: "12px 0", borderRadius: 16, border: "0.5px solid #f0dde6", background: "white", color: "#b89aab", fontSize: 13, cursor: "pointer" }}>
-                  もう一度やり直す
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
+優先度2【深掘りが必要】
+- 新しい視点・重要な感情・具体的なエピソードを出した直後
+- 「〜だから」「〜なんだよ」など理由や背景を話し始めた場合
+- → その人への深掘りを続ける（相手に切り替えない）
 
-        <p style={{ textAlign: "center", fontSize: 11, color: "#d0c0cc", marginTop: 20 }}>
-          入力内容は外部に保存されません
-        </p>
-      </div>
-    </main>
-  );
+優先度3【発言バランス】
+- 片方が3回以上連続して話している場合のみ相手に切り替える
+- 単純な交互切り替えはしない
+
+優先度4【相手への切り替え】
+- 上記3つに該当しない場合のみ相手に切り替える
+
+"parent" または "child" を返す
+
+【出力】JSONのみ・説明不要：
+{"type":"facilitate","comment":"会話内容を反映した具体的なコメント","nextSpeaker":"child"}`,
+        },
+        ...messages.map((m: any) => ({
+          role: m.role === "assistant" ? "assistant" : "user",
+          content: `[${m.role === "parent" ? "保護者" : m.role === "child" ? "お子さん" : "AI"}]: ${m.content}`,
+        })),
+      ],
+      response_format: { type: "json_object" },
+    });
+
+    const raw = completion.choices?.[0]?.message?.content?.trim() || "{}";
+    console.log("Family AI判定:", raw);
+
+    let interventionType = "facilitate";
+    let comment = "";
+    let nextSpeaker = defaultNext;
+
+    try {
+      const parsed = JSON.parse(raw);
+      interventionType = parsed.type || "facilitate";
+      comment = parsed.comment?.trim() || "";
+      if (parsed.nextSpeaker === "parent" || parsed.nextSpeaker === "child") {
+        nextSpeaker = parsed.nextSpeaker;
+      }
+    } catch (e) { console.error(e); }
+
+    // 強制切り替え（2回以上連続の場合は必ず相手へ）
+    if (forceSwitch) nextSpeaker = defaultNext;
+
+    if (!comment) {
+      const lastMsg = humanMessages.slice(-1)[0]?.content || "";
+      comment = `「${lastMsg.slice(0, 15)}」について、どんな気持ちがありますか？`;
+    }
+
+    return Response.json({ shouldIntervene: true, interventionType, reply: comment, nextSpeaker });
+
+  } catch (error) {
+    console.error(error);
+    return Response.json({ shouldIntervene: false, interventionType: "none", reply: null });
+  }
 }
