@@ -100,21 +100,29 @@ function CouplePageInner() {
     if (!SR) { alert("このブラウザは音声入力に対応していません"); return; }
     const r = new SR();
     r.lang="ja-JP"; r.continuous=true; r.interimResults=true; r.maxAlternatives=1;
+    let committed = ""; // 確定済みテキスト（入力欄の現在値から引き継がない）
     let silenceTimer: ReturnType<typeof setTimeout> | null = null;
-    r.onstart = () => setListening(true);
+    r.onstart = () => {
+      setListening(true);
+      // 開始時点の入力欄のテキストを引き継ぐ
+      setInput(prev => { committed = prev; return prev; });
+    };
     r.onresult = (e: any) => {
-      let finalTranscript = "";
-      let interimTranscript = "";
+      let interim = "";
       for (let i = e.resultIndex; i < e.results.length; i++) {
-        const transcript = e.results[i][0].transcript;
-        if (e.results[i].isFinal) finalTranscript += transcript;
-        else interimTranscript += transcript;
+        const t = e.results[i][0].transcript;
+        if (e.results[i].isFinal) committed += t;
+        else interim = t;
       }
-      setInput(finalTranscript + interimTranscript);
+      setInput(committed + interim);
       if (silenceTimer) clearTimeout(silenceTimer);
       silenceTimer = setTimeout(() => r.stop(), 20000);
     };
-    r.onend = () => { setListening(false); if (silenceTimer) clearTimeout(silenceTimer); };
+    r.onend = () => {
+      setListening(false);
+      if (silenceTimer) clearTimeout(silenceTimer);
+      setInput(committed);
+    };
     r.onerror = () => setListening(false);
     window.speechSynthesis.cancel();
     setTimeout(() => r.start(), 300);

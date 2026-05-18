@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 
 type Step = "user" | "partner" | "result";
@@ -11,6 +11,7 @@ type TranslationResult = {
   sessionTheme: string;
   sessionGoal: string;
   coreConflict: string;
+  nextStepHint: string;
 };
 
 export default function FreePage() {
@@ -20,9 +21,57 @@ export default function FreePage() {
   const [partnerDump, setPartnerDump] = useState("");
   const [result, setResult] = useState<TranslationResult | null>(null);
   const [loading, setLoading] = useState(false);
+  const [listening, setListening] = useState(false);
+  const recognitionRef = useRef<any>(null);
 
-  const handleTranslate = async () => {
-    if (!userDump.trim() || !partnerDump.trim()) return;
+  const startListening = (setter: (v: string) => void, current: string) => {
+    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SR) { alert("このブラウザは音声入力に対応していません"); return; }
+
+    // 既に動いていれば停止
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+      recognitionRef.current = null;
+      setListening(false);
+      return;
+    }
+
+    const r = new SR();
+    r.lang = "ja-JP";
+    r.continuous = true;
+    r.interimResults = true;
+    recognitionRef.current = r;
+
+    let committed = current; // 確定済みテキストを保持
+    let silenceTimer: ReturnType<typeof setTimeout> | null = null;
+
+    r.onstart = () => setListening(true);
+
+    r.onresult = (e: any) => {
+      let interim = "";
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const t = e.results[i][0].transcript;
+        if (e.results[i].isFinal) {
+          committed += t;
+        } else {
+          interim = t;
+        }
+      }
+      setter(committed + interim);
+      if (silenceTimer) clearTimeout(silenceTimer);
+      silenceTimer = setTimeout(() => r.stop(), 20000);
+    };
+
+    r.onend = () => {
+      setListening(false);
+      recognitionRef.current = null;
+      if (silenceTimer) clearTimeout(silenceTimer);
+      setter(committed);
+    };
+
+    r.onerror = () => { setListening(false); recognitionRef.current = null; };
+    r.start();
+  };
     setLoading(true);
     try {
       const res = await fetch("/api/free-dump", {
@@ -82,7 +131,13 @@ export default function FreePage() {
                 <h2 style={{ fontSize: 17, color: "#3a2030", margin: 0 }}>あなたの本音を書いてください</h2>
                 <p style={{ fontSize: 12, color: "#b89aab", marginTop: 6 }}>パートナーには見せません。思ったままで大丈夫です。</p>
               </div>
-              <textarea placeholder="モヤモヤしていること、言えなかったこと、怒り、悲しみ…なんでも。" rows={8} value={userDump} onChange={e => setUserDump(e.target.value)} style={inputStyle} />
+              <div style={{ position: "relative" }}>
+                <textarea placeholder="モヤモヤしていること、言えなかったこと、怒り、悲しみ…なんでも。" rows={8} value={userDump} onChange={e => setUserDump(e.target.value)} style={{...inputStyle, paddingRight: 48}} />
+                <button onClick={() => startListening(setUserDump, userDump)}
+                  style={{ position: "absolute", bottom: 10, right: 10, width: 32, height: 32, borderRadius: "50%", border: "none", background: listening ? "#E24B4A" : "#f5eef2", color: listening ? "white" : "#b89aab", fontSize: 14, cursor: "pointer" }}>
+                  {listening ? "⏹" : "🎤"}
+                </button>
+              </div>
               <button onClick={() => setStep("partner")} disabled={!userDump.trim()}
                 style={{ padding: "14px 0", borderRadius: 16, border: "none", background: userDump.trim() ? "#D4537E" : "#f5eef2", color: userDump.trim() ? "white" : "#d0c0cc", fontSize: 14, fontWeight: 500, cursor: userDump.trim() ? "pointer" : "default" }}>
                 次へ →
@@ -98,7 +153,13 @@ export default function FreePage() {
                 <h2 style={{ fontSize: 17, color: "#3a2030", margin: 0 }}>パートナーの本音を書いてください</h2>
                 <p style={{ fontSize: 12, color: "#b89aab", marginTop: 6 }}>パートナー本人が入力するか、代わりに書いてください。</p>
               </div>
-              <textarea placeholder="パートナーの立場から…" rows={8} value={partnerDump} onChange={e => setPartnerDump(e.target.value)} style={inputStyle} />
+              <div style={{ position: "relative" }}>
+                <textarea placeholder="パートナーの立場から…" rows={8} value={partnerDump} onChange={e => setPartnerDump(e.target.value)} style={{...inputStyle, paddingRight: 48}} />
+                <button onClick={() => startListening(setPartnerDump, partnerDump)}
+                  style={{ position: "absolute", bottom: 10, right: 10, width: 32, height: 32, borderRadius: "50%", border: "none", background: listening ? "#E24B4A" : "#f5eef2", color: listening ? "white" : "#b89aab", fontSize: 14, cursor: "pointer" }}>
+                  {listening ? "⏹" : "🎤"}
+                </button>
+              </div>
               <div style={{ display: "flex", gap: 10 }}>
                 <button onClick={() => setStep("user")}
                   style={{ flex: 1, padding: "14px 0", borderRadius: 16, border: "0.5px solid #f0dde6", background: "white", color: "#b89aab", fontSize: 14, cursor: "pointer" }}>
@@ -150,6 +211,14 @@ export default function FreePage() {
                   <div style={{ fontSize: 14, color: "#3a2030" }}>{result.sessionGoal}</div>
                 </div>
               </div>
+
+              {/* 次のステップヒント */}
+              {result.nextStepHint && (
+                <div style={{ background: "linear-gradient(135deg,#EAF3DE,#E6F1FB)", borderRadius: 16, padding: "16px 20px" }}>
+                  <div style={{ fontSize: 11, color: "#3B6D11", marginBottom: 8 }}>💡 これから解決できそうなこと</div>
+                  <p style={{ fontSize: 13, color: "#2a3a2a", lineHeight: 1.7, margin: 0 }}>{result.nextStepHint}</p>
+                </div>
+              )}
 
               {/* ボタン */}
               <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 4 }}>
