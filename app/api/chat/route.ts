@@ -23,6 +23,8 @@ export async function POST(req: Request) {
     const messages = body.messages || [];
     const isEndSession = body.isEndSession || false;
     const introData = body.introData || {};
+    const preConflict = body.preConflict || "";
+    const preGoal = body.preGoal || "";
 
     if (isEndSession) {
       const completion = await openai.chat.completions.create({
@@ -125,9 +127,20 @@ ${introData.userName ? `【二人の基本情報】
 関係性：${introData.relationship}
 現在困っていること：${introData.issue}
 今日話したいテーマ：${introData.theme}
-↑ この背景を踏まえて、会話のズレを自然に整理してください。
+` : ""}${preConflict ? `【事前翻訳結果】
+核心的なぶつかり：${preConflict}
+今日の目標：${preGoal}
+↑ この背景を踏まえて会話を整理してください。
 
 ` : ""}${stagePrompt[conversationStage]}
+
+【中立性ルール（厳守）】
+- 一方を「加害者」「被害者」と決めつけない
+- 「モラハラ」「毒親」「依存」「自己愛」「発達障害」などの強いラベルをAI側から断定しない
+- ユーザーがその言葉を使っても、事実確認と認識のズレ整理を優先する
+- 悪い例：「モラハラによって不安が強くなっている」
+- 良い例：「相手の態度を"自分を守る必要がある状況"として受け取っているのですね」
+- AIは診断者ではなく、二人の認識の違いを可視化する役
 
 【スタイル全般（厳守）】
 - ユーザーが「分析された」ではなく「わかってもらえた」と感じる言葉を選ぶ
@@ -194,6 +207,14 @@ ${introData.userName ? `【二人の基本情報】
     if (!comment) {
       const lastMsg = humanMessages.slice(-1)[0]?.content || "";
       comment = `「${lastMsg.slice(0, 15)}」について、どんな気持ちがありますか？`;
+    }
+
+    // 禁止ラベルを中立表現に置き換える
+    const bannedLabels = ["モラハラ", "毒親", "依存", "自己愛", "発達障害", "パワハラ", "ガスライティング"];
+    for (const word of bannedLabels) {
+      if (comment.includes(word)) {
+        comment = comment.replace(word, "そう受け取られている状況");
+      }
     }
 
     // 「整理」を提案したなら必ず具体化する

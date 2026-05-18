@@ -1,7 +1,12 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+
+function CouplePageInner() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
 
 type Role = "user" | "partner" | "assistant";
 type Message = { role: Role; content: string };
@@ -23,6 +28,25 @@ const TYPE_TO_MOOD: Record<string, MoodKey> = {
 };
 
 export default function CouplePage() {
+  return (
+    <Suspense fallback={<div style={{ minHeight: "100vh", background: "#FDF6F9" }} />}>
+      <CouplePageInner />
+    </Suspense>
+  );
+}
+
+function CouplePageInner() {
+  const searchParams = useSearchParams();
+
+  // 無料版からの引き継ぎデータ
+  const preTheme = searchParams.get("theme") || "";
+  const preGoal = searchParams.get("goal") || "";
+  const preConflict = searchParams.get("conflict") || "";
+
+  const [introCompleted, setIntroCompleted] = useState(false);
+  const [introData, setIntroData] = useState({
+    userName: "", partnerName: "", relationship: "", issue: "", theme: preTheme,
+  });
   const [messages, setMessages] = useState<Message[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [emotionScores, setEmotionScores] = useState<EmotionScores | null>(null);
@@ -36,6 +60,7 @@ export default function CouplePage() {
   const [interventionType, setInterventionType] = useState<string | null>(null);
   const [mood, setMood] = useState<MoodKey>("neutral");
   const [showSessions, setShowSessions] = useState(false);
+  const [sessionGoalReached, setSessionGoalReached] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, loading]);
@@ -78,28 +103,33 @@ export default function CouplePage() {
   };
 
   const startListening = () => {
-    if (isSpeaking) { window.speechSynthesis.cancel(); setIsSpeaking(false); }
+    if (isSpeaking) {
+      window.speechSynthesis.cancel();
+      setIsSpeaking(false);
+    }
     const SR = (window as any).SpeechRecognition||(window as any).webkitSpeechRecognition;
     if (!SR) { alert("このブラウザは音声入力に対応していません"); return; }
     const r = new SR();
     r.lang="ja-JP"; r.continuous=true; r.interimResults=true; r.maxAlternatives=1;
-    let finalTranscript = "";
     let silenceTimer: ReturnType<typeof setTimeout> | null = null;
     r.onstart = () => setListening(true);
     r.onresult = (e: any) => {
-      let interim = "";
+      let finalTranscript = "";
+      let interimTranscript = "";
       for (let i = e.resultIndex; i < e.results.length; i++) {
-        const t = e.results[i][0].transcript;
-        if (e.results[i].isFinal) finalTranscript += t;
-        else interim = t;
+        const transcript = e.results[i][0].transcript;
+        if (e.results[i].isFinal) finalTranscript += transcript;
+        else interimTranscript += transcript;
       }
-      setInput(finalTranscript + interim);
+      setInput(finalTranscript + interimTranscript);
       if (silenceTimer) clearTimeout(silenceTimer);
-      silenceTimer = setTimeout(() => r.stop(), 10000);
+      silenceTimer = setTimeout(() => r.stop(), 20000);
     };
-    r.onend = () => { setListening(false); if (silenceTimer) clearTimeout(silenceTimer); if (finalTranscript) setInput(finalTranscript); };
+    r.onend = () => { setListening(false); if (silenceTimer) clearTimeout(silenceTimer); };
     r.onerror = () => setListening(false);
-    r.start();
+    // 音声合成との競合を避けるため少し遅らせて開始
+    window.speechSynthesis.cancel();
+    setTimeout(() => r.start(), 300);
   };
 
   const sendMessage = async () => {
@@ -109,13 +139,15 @@ export default function CouplePage() {
     setInterventionType(null); setMood(detectMood(newMessages));
     setLoading(true);
     try {
-      const res = await fetch("/api/chat", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ messages: newMessages }) });
+      const res = await fetch("/api/chat", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ messages: newMessages, introData, preConflict, preGoal }) });
       const data = await res.json();
       if (data.shouldIntervene && data.reply) {
         setInterventionType(data.interventionType);
         setMessages(p=>[...p,{role:"assistant",content:data.reply}]);
         if (data.interventionType && TYPE_TO_MOOD[data.interventionType]) setMood(TYPE_TO_MOOD[data.interventionType]);
         if (data.nextSpeaker) setSpeaker(data.nextSpeaker as "user" | "partner");
+        // encourageが出たら到達地点に近づいたと判定
+        if (data.interventionType === "encourage") setSessionGoalReached(true);
         speak(data.reply, data.interventionType==="mediate"||data.interventionType==="clarify"?"tense":"calm");
       } else {
         setSpeaker(p => p === "user" ? "partner" : "user");
@@ -157,6 +189,55 @@ export default function CouplePage() {
     clarify:   {icon:"🔍",bg:"#FAEEDA",text:"#854F0B",border:"#FAC775"},
     encourage: {icon:"✨",bg:"#EAF3DE",text:"#3B6D11",border:"#C0DD97"},
   };
+
+  const inputStyle = {
+    border: "0.5px solid #f0dde6", borderRadius: 14,
+    padding: "12px 14px", fontSize: 14, width: "100%",
+    fontFamily: "inherit", outline: "none" as const,
+  };
+  const textareaStyle = {
+    border: "0.5px solid #f0dde6", borderRadius: 14,
+    padding: "12px 14px", fontSize: 14, resize: "none" as const,
+    fontFamily: "inherit", outline: "none" as const, width: "100%",
+  };
+
+  // イントロ画面
+  if (!introCompleted) {
+    return (
+      <main style={{ minHeight: "100vh", background: "#FDF6F9", display: "flex", justifyContent: "center", alignItems: "center", padding: 24, fontFamily: "'DM Sans',sans-serif" }}>
+        <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500&family=DM+Serif+Display:ital@0;1&display=swap'); input:focus,textarea:focus{outline:none}`}</style>
+        <div style={{ width: "100%", maxWidth: 480, background: "white", borderRadius: 24, padding: 32, border: "0.5px solid #f0dde6", display: "flex", flexDirection: "column", gap: 14, boxShadow: "0 4px 24px rgba(212,83,126,.08)" }}>
+          <h1 style={{ fontFamily: "'DM Serif Display',serif", fontSize: 24, color: "#3a2030", marginBottom: 4 }}>Couple Counseling</h1>
+          <p style={{ fontSize: 13, color: "#b89aab", lineHeight: 1.6, margin: 0 }}>
+            最初に、今のお二人について少しだけ教えてください。
+          </p>
+
+          {/* 無料版からの引き継ぎ */}
+          {preConflict && (
+            <div style={{ background: "linear-gradient(135deg,#FBEAF0,#E6F1FB)", borderRadius: 14, padding: "14px 16px" }}>
+              <div style={{ fontSize: 11, color: "#993556", marginBottom: 6 }}>💬 翻訳結果より</div>
+              <div style={{ fontSize: 13, fontWeight: 500, color: "#3a2030", marginBottom: 4 }}>{preConflict}</div>
+              {preGoal && <div style={{ fontSize: 12, color: "#7a6070" }}>目標：{preGoal}</div>}
+            </div>
+          )}
+          <input placeholder="あなたの名前" value={introData.userName}
+            onChange={e => setIntroData({...introData, userName: e.target.value})} style={inputStyle} />
+          <input placeholder="パートナーの名前" value={introData.partnerName}
+            onChange={e => setIntroData({...introData, partnerName: e.target.value})} style={inputStyle} />
+          <input placeholder="関係性（恋人・夫婦など）" value={introData.relationship}
+            onChange={e => setIntroData({...introData, relationship: e.target.value})} style={inputStyle} />
+          <textarea placeholder="今一番困っていること" rows={3} value={introData.issue}
+            onChange={e => setIntroData({...introData, issue: e.target.value})} style={textareaStyle} />
+          <textarea placeholder="今日話したいテーマ" rows={2} value={introData.theme}
+            onChange={e => setIntroData({...introData, theme: e.target.value})} style={textareaStyle} />
+          <button onClick={() => setIntroCompleted(true)}
+            style={{ marginTop: 8, border: "none", background: "#D4537E", color: "white", padding: "14px 0", borderRadius: 16, fontSize: 14, cursor: "pointer", fontWeight: 500 }}>
+            会話を始める
+          </button>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main style={{minHeight:"100vh",background:"#FDF6F9",display:"flex",fontFamily:"'DM Sans',sans-serif"}}>
@@ -234,11 +315,20 @@ export default function CouplePage() {
       <div style={{flex:1,display:"flex",justifyContent:"center",alignItems:"flex-start",padding:"24px"}}>
         <div style={{width:"100%",maxWidth:560,background:"white",borderRadius:24,border:"0.5px solid #f0dde6",display:"flex",flexDirection:"column",height:"calc(100vh - 48px)",boxShadow:"0 2px 24px rgba(212,83,126,.06)"}}>
 
-          <div style={{padding:"18px 24px",borderBottom:"0.5px solid #f0dde6",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-            <span style={{fontFamily:"'DM Serif Display',serif",fontSize:16,color:"#3a2030"}}>Couple Counseling</span>
-            <span style={{fontSize:11,padding:"3px 12px",borderRadius:20,background:speaker==="user"?"#FBEAF0":"#E6F1FB",color:speaker==="user"?"#993556":"#185FA5",fontWeight:500}}>
-              {speaker==="user"?"あなたの番":"パートナーの番"}
-            </span>
+          <div style={{padding:"18px 24px",borderBottom:"0.5px solid #f0dde6",display:"flex",flexDirection:"column",gap:8}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+              <span style={{fontFamily:"'DM Serif Display',serif",fontSize:16,color:"#3a2030"}}>Couple Counseling</span>
+              <span style={{fontSize:11,padding:"3px 12px",borderRadius:20,background:speaker==="user"?"#FBEAF0":"#E6F1FB",color:speaker==="user"?"#993556":"#185FA5",fontWeight:500}}>
+                {speaker==="user"?"あなたの番":"パートナーの番"}
+              </span>
+            </div>
+            {preGoal && (
+              <div style={{fontSize:11,color:"#5F5E5A",background:"#F1EFE8",borderRadius:10,padding:"6px 12px",display:"flex",alignItems:"center",gap:6}}>
+                <span>🎯</span>
+                <span>{preGoal}</span>
+                {sessionGoalReached && <span style={{marginLeft:"auto",color:"#3B6D11",fontWeight:500}}>✨ 到達</span>}
+              </div>
+            )}
           </div>
 
           {(emotionScores||keywords.length>0||issues.length>0)&&(
