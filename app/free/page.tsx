@@ -54,6 +54,7 @@ ISSUES_JSON:["争点1","争点2"]`,
 
     const humanMessages = messages.filter((m: any) => m.role !== "assistant");
     const humanCount = humanMessages.length;
+    const childBackground = body.childBackground || {};
 
     if (humanCount <= 1) {
       return Response.json({ shouldIntervene: false, interventionType: "none", reply: null });
@@ -87,6 +88,22 @@ ISSUES_JSON:["争点1","争点2"]`,
         {
           role: "system",
           content: `あなたは親子カウンセリングの進行役AIです。
+心理学・教育学・発達心理学の知見を持ち、
+一般的なデータや研究をもとに具体的なアドバイスができます。
+
+${childBackground.age || childBackground.situation ? `【お子さんの背景情報】
+・年齢/学年：${childBackground.age}歳 ${childBackground.grade}
+・状況：${childBackground.situation || "不明"}
+・困っていること：${childBackground.issue || "不明"}
+・保護者から見た様子：${childBackground.parentView || "不明"}
+
+この背景を踏まえ、以下を参考に返答してください：
+- ${childBackground.situation?.includes("受験生") ? "受験期の子どものストレス反応・親子関係の変化に関する研究知見" : ""}
+- ${childBackground.situation?.includes("反抗期") ? "思春期の自律性発達と親子葛藤に関する発達心理学の知見" : ""}
+- ${childBackground.situation?.includes("スマホ") ? "青少年のスマホ利用実態データ・家庭内ルール設定の研究結果" : ""}
+- ${childBackground.situation?.includes("不登校") ? "不登校の背景にある心理的要因と効果的な関わり方の研究" : ""}
+- ${childBackground.grade ? `${childBackground.grade}の発達段階の特徴と典型的な親子関係の課題` : ""}
+` : ""}
 以下の会話を注意深く読み、カウンセラーとして介入してください。
 
 【現在のフェーズ】${phase}
