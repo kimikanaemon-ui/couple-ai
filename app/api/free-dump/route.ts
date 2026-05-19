@@ -1,6 +1,8 @@
 import OpenAI from "openai";
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
 
 export async function POST(req: Request) {
   try {
@@ -9,51 +11,81 @@ export async function POST(req: Request) {
 
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
+      temperature: 0.7,
+
       messages: [
         {
           role: "system",
-          content: `あなたはカップルの気持ちを翻訳するカウンセラーです。
-二人それぞれの「ぶちまけ」を読んで、以下をJSONで返してください。
+          content: `
+あなたはカップル・親子関係の感情翻訳AIです。
 
-【ルール】
-- 感情の裏にあるものを自然な言葉で丁寧に翻訳する（2〜4文）
-- 心理学用語・専門用語を使わない
-- 「〜なのかもしれません」「〜と感じているのかも」のような柔らかい表現
-- 一方を責めず、どちらの気持ちも丁寧に扱う
-- 禁止ラベル：モラハラ・毒親・依存・自己愛・発達障害
+ユーザー同士のぶつかり合いの奥にある、
+「本当は分かってほしい気持ち」
+を丁寧に翻訳してください。
 
-【bridgeMessage のルール】
-- 「二人で話したら変わりそう」と自然に感じさせる一言
-- 押しつけがましくない。希望を感じる言葉
-- 「〜できそうです」「〜が見えてきます」のような前向きな表現
-- 解決策を押しつけない。「話す場があれば」のようなやわらかさ
-- 1〜2文で完結
+禁止：
+- 心理診断
+- 病名
+- モラハラ等の断定
+- 一方だけを悪者にすること
 
-【出力形式】JSONのみ：
-{
-  "translatedUserFeelings": "あなたの気持ちの翻訳（2〜4文、丁寧に）",
-  "translatedPartnerFeelings": "パートナーの気持ちの翻訳（2〜4文、丁寧に）",
-  "sessionTheme": "二人の間で起きていることを一言で（20文字以内）",
-  "sessionGoal": "今日の対話で目指せそうなこと（30文字以内）",
-  "coreConflict": "何と何がぶつかっているか（例：安心したい vs 自由でいたい）",
-  "nextStepHint": "これから解決できそうな方向性（2〜3文、希望を感じる言葉で）",
-  "bridgeMessage": "二人で話したら変わりそうと感じさせる自然な一言（1〜2文）"
-}`,
+必ずJSONのみ返してください。
+`,
         },
         {
           role: "user",
-          content: `【あなたのぶちまけ】\n${userDump}\n\n【パートナーのぶちまけ】\n${partnerDump}`,
+          content: `
+【あなた】
+${userDump}
+
+【相手】
+${partnerDump}
+
+以下のJSON形式のみで返してください。
+
+{
+  "translatedUserFeelings": "",
+  "translatedPartnerFeelings": "",
+  "sessionTheme": "",
+  "sessionGoal": "",
+  "coreConflict": "",
+  "nextStepHint": "",
+  "bridgeMessage": ""
+}
+`,
         },
       ],
-      response_format: { type: "json_object" },
     });
 
-    const raw = completion.choices?.[0]?.message?.content || "{}";
-    const result = JSON.parse(raw);
-    return Response.json(result);
+    const raw =
+      completion.choices?.[0]?.message?.content || "";
+
+    console.log("RAW:", raw);
+
+    const cleaned = raw
+      .replace(/```json/g, "")
+      .replace(/```/g, "")
+      .trim();
+
+    const parsed = JSON.parse(cleaned);
+
+    return Response.json(parsed);
 
   } catch (error) {
-    console.error(error);
-    return Response.json({ error: "エラーが発生しました" }, { status: 500 });
+    console.error("FREE DUMP ERROR:", error);
+
+    return Response.json({
+      translatedUserFeelings:
+        "うまく解析できませんでした。",
+      translatedPartnerFeelings:
+        "もう一度お試しください。",
+      sessionTheme: "解析エラー",
+      sessionGoal: "再試行",
+      coreConflict: "データ取得エラー",
+      nextStepHint:
+        "時間を空けて再度試してください。",
+      bridgeMessage:
+        "会話を整理し直すと見えてくるものがあるかもしれません。",
+    });
   }
 }
