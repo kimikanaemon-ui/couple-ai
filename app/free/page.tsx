@@ -134,7 +134,7 @@ export default function FreePage() {
               <div>
                 <div style={{ fontSize: 11, color: "#b89aab", marginBottom: 6, letterSpacing: ".05em", textTransform: "uppercase" }}>Step 1</div>
                 <h2 style={{ fontSize: 17, color: "#3a2030", margin: 0 }}>あなたの本音を書いてください</h2>
-                <p style={{ fontSize: 12, color: "#b89aab", marginTop: 6 }}>パートナーには見せません。思ったままで大丈夫です。</p>
+                <p style={{ fontSize: 12, color: "#b89aab", marginTop: 6 }}>相手には見せません。思ったままで大丈夫です。</p>
               </div>
               <div style={{ position: "relative" }}>
                 <textarea placeholder="モヤモヤしていること、言えなかったこと、怒り、悲しみ…なんでも。" rows={8} value={userDump} onChange={e => setUserDump(e.target.value)} style={{...inputStyle, paddingRight: 48}} />
@@ -150,16 +150,16 @@ export default function FreePage() {
             </div>
           )}
 
-          {/* Step 2: パートナー */}
+          {/* Step 2: 相手 */}
           {step === "partner" && (
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
               <div>
                 <div style={{ fontSize: 11, color: "#b89aab", marginBottom: 6, letterSpacing: ".05em", textTransform: "uppercase" }}>Step 2</div>
-                <h2 style={{ fontSize: 17, color: "#3a2030", margin: 0 }}>パートナーの本音を書いてください</h2>
-                <p style={{ fontSize: 12, color: "#b89aab", marginTop: 6 }}>パートナー本人が入力するか、代わりに書いてください。</p>
+                <h2 style={{ fontSize: 17, color: "#3a2030", margin: 0 }}>相手の本音を書いてください</h2>
+                <p style={{ fontSize: 12, color: "#b89aab", marginTop: 6 }}>相手本人が入力するか、代わりに書いてください。</p>
               </div>
               <div style={{ position: "relative" }}>
-                <textarea placeholder="パートナーの立場から…" rows={8} value={partnerDump} onChange={e => setPartnerDump(e.target.value)} style={{...inputStyle, paddingRight: 48}} />
+                <textarea placeholder="相手の立場から…" rows={8} value={partnerDump} onChange={e => setPartnerDump(e.target.value)} style={{...inputStyle, paddingRight: 48}} />
                 <button onClick={() => startListening(setPartnerDump, partnerDump)}
                   style={{ position: "absolute", bottom: 10, right: 10, width: 32, height: 32, borderRadius: "50%", border: "none", background: listening ? "#E24B4A" : "#f5eef2", color: listening ? "white" : "#b89aab", fontSize: 14, cursor: "pointer" }}>
                   {listening ? "⏹" : "🎤"}
@@ -198,9 +198,9 @@ export default function FreePage() {
                 <p style={{ fontSize: 13, color: "#4B1528", lineHeight: 1.7, margin: 0 }}>{result.translatedUserFeelings}</p>
               </div>
 
-              {/* パートナーの翻訳 */}
+              {/* 相手の翻訳 */}
               <div style={{ background: "#E6F1FB", borderRadius: 16, padding: "16px 20px" }}>
-                <div style={{ fontSize: 11, color: "#185FA5", marginBottom: 8 }}>💙 パートナーの本当の気持ち</div>
+                <div style={{ fontSize: 11, color: "#185FA5", marginBottom: 8 }}>💙 相手の本当の気持ち</div>
                 <p style={{ fontSize: 13, color: "#042C53", lineHeight: 1.7, margin: 0 }}>{result.translatedPartnerFeelings}</p>
               </div>
 
