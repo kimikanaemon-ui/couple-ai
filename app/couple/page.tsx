@@ -1,317 +1,148 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { supabase } from "@/lib/supabase";
 
-type Message = {
-  role: "user" | "partner" | "ai";
-  text: string;
-};
+export default function Home() {
+  const router = useRouter();
+  const [user, setUser] = useState<any>(null);
 
-export default function CouplePage() {
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      role: "ai",
-      text:
-        "こんにちは。今日は二人の会話を整理していきます。まず、今いちばんモヤモヤしていることを教えてください。",
-    },
-  ]);
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
+    return () => subscription.unsubscribe();
+  }, []);
 
-  const [input, setInput] = useState("");
-  const [speaker, setSpeaker] = useState<"user" | "partner">("user");
-
-  const [loading, setLoading] = useState(false);
-
-  const [listening, setListening] = useState(false);
-
-  const recognitionRef = useRef<any>(null);
-
-  const startListening = () => {
-    const SR =
-      (window as any).SpeechRecognition ||
-      (window as any).webkitSpeechRecognition;
-
-    if (!SR) {
-      alert("このブラウザは音声入力に対応していません");
-      return;
-    }
-
-    if (recognitionRef.current) {
-      recognitionRef.current.stop();
-      recognitionRef.current = null;
-      setListening(false);
-      return;
-    }
-
-    const recognition = new SR();
-
-    recognition.lang = "ja-JP";
-    recognition.interimResults = true;
-    recognition.continuous = true;
-
-    recognitionRef.current = recognition;
-
-    let finalTranscript = input;
-
-    recognition.onstart = () => {
-      setListening(true);
-    };
-
-    recognition.onresult = (event: any) => {
-      let interimTranscript = "";
-
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const transcript = event.results[i][0].transcript;
-
-        if (event.results[i].isFinal) {
-          finalTranscript += transcript;
-        } else {
-          interimTranscript += transcript;
-        }
-      }
-
-      setInput(finalTranscript + interimTranscript);
-    };
-
-    recognition.onerror = () => {
-      setListening(false);
-      recognitionRef.current = null;
-    };
-
-    recognition.onend = () => {
-      setListening(false);
-      recognitionRef.current = null;
-      setInput(finalTranscript);
-    };
-
-    recognition.start();
-  };
-
-  const sendMessage = async () => {
-    if (!input.trim()) return;
-
-    const newMessages: Message[] = [
-      ...messages,
-      {
-        role: speaker,
-        text: input,
-      },
-    ];
-
-    setMessages(newMessages);
-
-    const currentInput = input;
-
-    setInput("");
-
-    setLoading(true);
-
-    try {
-      const res = await fetch("/api/chat", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          messages: newMessages,
-        }),
-      });
-
-      const data = await res.json();
-
-      setMessages([
-        ...newMessages,
-        {
-          role: "ai",
-          text: data.reply,
-        },
-      ]);
-
-      setSpeaker(speaker === "user" ? "partner" : "user");
-    } catch (e) {
-      console.error(e);
-
-      setMessages([
-        ...newMessages,
-        {
-          role: "ai",
-          text: "通信エラーが発生しました。",
-        },
-      ]);
-    } finally {
-      setLoading(false);
-    }
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    setUser(null);
   };
 
   return (
-    <main
-      style={{
-        minHeight: "100vh",
-        background:
-          "linear-gradient(135deg,#FDF6F9 0%,#F4F9FF 100%)",
-        padding: 24,
-        fontFamily: "sans-serif",
-      }}
-    >
-      <div
-        style={{
-          maxWidth: 700,
-          margin: "0 auto",
-        }}
-      >
-        <h1
-          style={{
-            textAlign: "center",
-            marginBottom: 24,
-            color: "#3a2030",
-          }}
-        >
-          💑 カップル対話
-        </h1>
+    <main style={{ minHeight: "100vh", background: "linear-gradient(135deg, #FDF6F9 0%, #F4F9FF 100%)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", fontFamily: "'DM Sans', sans-serif", padding: 24 }}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500&family=DM+Serif+Display:ital@0;1&display=swap');
+        @keyframes fadein { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+        .card { animation: fadein 0.5s ease both; }
+        .card:hover { transform: translateY(-4px) scale(1.02); box-shadow: 0 12px 40px rgba(0,0,0,.10) !important; }
+        .card { transition: transform .25s ease, box-shadow .25s ease; }
+      `}</style>
 
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: 12,
-            marginBottom: 24,
-          }}
-        >
-          {messages.map((m, i) => (
-            <div
-              key={i}
-              style={{
-                alignSelf:
-                  m.role === "ai"
-                    ? "center"
-                    : m.role === "user"
-                    ? "flex-start"
-                    : "flex-end",
-
-                background:
-                  m.role === "ai"
-                    ? "#fff"
-                    : m.role === "user"
-                    ? "#FBEAF0"
-                    : "#E6F1FB",
-
-                padding: "14px 16px",
-                borderRadius: 18,
-                maxWidth: "85%",
-                lineHeight: 1.7,
-                fontSize: 14,
-                whiteSpace: "pre-wrap",
-              }}
-            >
-              {m.text}
-            </div>
-          ))}
-        </div>
-
-        <div
-          style={{
-            display: "flex",
-            gap: 8,
-            marginBottom: 10,
-          }}
-        >
-          <button
-            onClick={() => setSpeaker("user")}
-            style={{
-              flex: 1,
-              padding: 12,
-              borderRadius: 14,
-              border:
-                speaker === "user"
-                  ? "2px solid #D4537E"
-                  : "1px solid #ddd",
-              background:
-                speaker === "user"
-                  ? "#FBEAF0"
-                  : "white",
+      {/* ユーザー情報 */}
+      <div style={{ position: "fixed", top: 16, right: 16, display: "flex", alignItems: "center", gap: 10 }}>
+        {user ? (
+          <>
+            <span style={{ fontSize: 12, color: "#b89aab" }}>{user.email}</span>
+            <button onClick={async () => {
+              try {
+                const res = await fetch("/api/stripe/checkout", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ userId: user.id, email: user.email }),
+                });
+                const data = await res.json();
+                console.log("Stripe response:", data);
+                if (data.url) {
+                  window.location.href = data.url;
+                } else {
+                  alert("エラー: " + JSON.stringify(data));
+                }
+              } catch (e) {
+                console.error("Stripe error:", e);
+                alert("通信エラーが発生しました");
+              }
             }}
-          >
-            👩 あなた
+              style={{ fontSize: 11, padding: "5px 14px", borderRadius: 20, border: "none", background: "linear-gradient(135deg,#D4537E,#E07B2A)", color: "white", cursor: "pointer", fontWeight: 500 }}>
+              ✨ Premium
+            </button>
+            <button onClick={handleLogout}
+              style={{ fontSize: 11, padding: "5px 14px", borderRadius: 20, border: "0.5px solid #f0dde6", background: "white", color: "#b89aab", cursor: "pointer" }}>
+              ログアウト
+            </button>
+          </>
+        ) : (
+          <button onClick={() => router.push("/login")}
+            style={{ fontSize: 11, padding: "5px 14px", borderRadius: 20, border: "none", background: "#D4537E", color: "white", cursor: "pointer", fontWeight: 500 }}>
+            ログイン
           </button>
-
-          <button
-            onClick={() => setSpeaker("partner")}
-            style={{
-              flex: 1,
-              padding: 12,
-              borderRadius: 14,
-              border:
-                speaker === "partner"
-                  ? "2px solid #4A90E2"
-                  : "1px solid #ddd",
-              background:
-                speaker === "partner"
-                  ? "#E6F1FB"
-                  : "white",
-            }}
-          >
-            👨 相手
-          </button>
-        </div>
-
-        <div
-          style={{
-            position: "relative",
-          }}
-        >
-          <textarea
-            rows={4}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="今の気持ちを入力してください"
-            style={{
-              width: "100%",
-              borderRadius: 18,
-              border: "1px solid #ddd",
-              padding: "16px 52px 16px 16px",
-              resize: "none",
-              fontSize: 14,
-              lineHeight: 1.7,
-            }}
-          />
-
-          <button
-            onClick={startListening}
-            style={{
-              position: "absolute",
-              right: 12,
-              bottom: 12,
-              width: 36,
-              height: 36,
-              borderRadius: "50%",
-              border: "none",
-              background: listening ? "#E24B4A" : "#f3f3f3",
-              cursor: "pointer",
-              fontSize: 16,
-            }}
-          >
-            {listening ? "⏹" : "🎤"}
-          </button>
-        </div>
-
-        <button
-          onClick={sendMessage}
-          disabled={loading}
-          style={{
-            width: "100%",
-            marginTop: 12,
-            padding: 16,
-            borderRadius: 18,
-            border: "none",
-            background: "#D4537E",
-            color: "white",
-            fontSize: 15,
-            fontWeight: 600,
-            cursor: "pointer",
-          }}
-        >
-          {loading ? "AIが整理中…" : "送信する"}
-        </button>
+        )}
       </div>
+
+      {/* ロゴ */}
+      <div style={{ textAlign: "center", marginBottom: 48 }}>
+        <div style={{ fontSize: 36, marginBottom: 8 }}>🤝</div>
+        <h1 style={{ fontFamily: "'DM Serif Display', serif", fontSize: 28, color: "#2a1a2a", margin: 0 }}>
+          Counseling AI
+        </h1>
+        <p style={{ fontSize: 13, color: "#b89aab", marginTop: 8 }}>
+          安心して話せる場所を、AIが用意します
+        </p>
+      </div>
+
+      {/* カード選択 */}
+      <div style={{ display: "flex", gap: 20, flexWrap: "wrap", justifyContent: "center" }}>
+
+        {/* 無料版 */}
+        <div className="card"
+          onClick={() => router.push("/free")}
+          style={{ width: 220, background: "white", borderRadius: 24, border: "0.5px solid #e8f0e8", padding: "32px 24px", cursor: "pointer", textAlign: "center", boxShadow: "0 4px 20px rgba(99,153,34,.08)", animationDelay: "0s" }}>
+          <div style={{ fontSize: 48, marginBottom: 16 }}>💬</div>
+          <div style={{ fontSize: 10, background: "#EAF3DE", color: "#3B6D11", borderRadius: 20, padding: "3px 10px", display: "inline-block", marginBottom: 8, fontWeight: 500 }}>無料</div>
+          <h2 style={{ fontFamily: "'DM Serif Display', serif", fontSize: 18, color: "#3a2030", margin: "0 0 8px" }}>
+            気持ちを翻訳
+          </h2>
+          <p style={{ fontSize: 12, color: "#b89aab", lineHeight: 1.6, margin: "0 0 20px" }}>
+            本音をぶちまけて<br/>AIが気持ちを翻訳します
+          </p>
+          <div style={{ background: "#639922", color: "white", borderRadius: 20, padding: "8px 0", fontSize: 12, fontWeight: 500 }}>
+            はじめる →
+          </div>
+        </div>
+
+        {/* カップル有料版 */}
+        <div className="card"
+          onClick={() => router.push("/couple")}
+          style={{ width: 220, background: "white", borderRadius: 24, border: "0.5px solid #f0dde6", padding: "32px 24px", cursor: "pointer", textAlign: "center", boxShadow: "0 4px 20px rgba(212,83,126,.08)", animationDelay: "0.1s" }}>
+          <div style={{ fontSize: 48, marginBottom: 16 }}>💑</div>
+          <div style={{ fontSize: 10, background: "#FBEAF0", color: "#993556", borderRadius: 20, padding: "3px 10px", display: "inline-block", marginBottom: 8, fontWeight: 500 }}>有料</div>
+          <h2 style={{ fontFamily: "'DM Serif Display', serif", fontSize: 18, color: "#3a2030", margin: "0 0 8px" }}>
+            Couple
+          </h2>
+          <p style={{ fontSize: 12, color: "#b89aab", lineHeight: 1.6, margin: "0 0 20px" }}>
+            二人で対話＋AI仲裁<br/>セッション保存つき
+          </p>
+          <div style={{ background: "#D4537E", color: "white", borderRadius: 20, padding: "8px 0", fontSize: 12, fontWeight: 500 }}>
+            はじめる →
+          </div>
+        </div>
+
+        {/* 親子 */}
+        <div className="card"
+          onClick={() => router.push("/parent-child")}
+          style={{ width: 220, background: "white", borderRadius: 24, border: "0.5px solid #f0e4d0", padding: "32px 24px", cursor: "pointer", textAlign: "center", boxShadow: "0 4px 20px rgba(224,123,42,.08)", animationDelay: "0.2s" }}>
+          <div style={{ fontSize: 48, marginBottom: 16 }}>🌳</div>
+          <div style={{ fontSize: 10, background: "#FDE8C8", color: "#854F0B", borderRadius: 20, padding: "3px 10px", display: "inline-block", marginBottom: 8, fontWeight: 500 }}>有料</div>
+          <h2 style={{ fontFamily: "'DM Serif Display', serif", fontSize: 18, color: "#3a2a1a", margin: "0 0 8px" }}>
+            Family
+          </h2>
+          <p style={{ fontSize: 12, color: "#c4a882", lineHeight: 1.6, margin: "0 0 20px" }}>
+            親子の対話を<br/>AIがやさしく整理します
+          </p>
+          <div style={{ background: "#E07B2A", color: "white", borderRadius: 20, padding: "8px 0", fontSize: 12, fontWeight: 500 }}>
+            はじめる →
+          </div>
+        </div>
+
+      </div>
+
+      <p style={{ fontSize: 11, color: "#d0c0cc", marginTop: 40 }}>
+        会話内容は外部に保存されません
+      </p>
     </main>
   );
 }
