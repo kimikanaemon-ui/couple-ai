@@ -52,7 +52,7 @@ function CouplePageInner() {
     check();
   }, [router]);
 
-  if (isPremium === null) return <div style={{ minHeight:"100vh", background:"#FDF6F9", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"sans-serif", color:"#b89aab" }}>確認中…</div>;
+ 
 
   const [introCompleted, setIntroCompleted] = useState(false);
   const [introData, setIntroData] = useState({ userName: "", partnerName: "", relationship: "", issue: "", theme: preTheme });
@@ -184,6 +184,8 @@ function CouplePageInner() {
       }
     } catch(e){ console.error(e); } finally { setLoading(false); }
   };
+  
+  if (isPremium === null) return <div style={{ minHeight:"100vh", background:"#FDF6F9", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"sans-serif", color:"#b89aab" }}>確認中…</div>;
 
   const cm = MOODS[mood];
   const ts: Record<string,{icon:string;bg:string;text:string;border:string}> = {
