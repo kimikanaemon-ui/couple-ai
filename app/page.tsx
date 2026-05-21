@@ -1,11 +1,21 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useState, Suspense } from "react";
 import { supabase } from "@/lib/supabase";
 
 export default function Home() {
+  return (
+    <Suspense fallback={<div style={{ minHeight:"100vh", background:"#FDF6F9" }}/>}>
+      <HomeInner />
+    </Suspense>
+  );
+}
+
+function HomeInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const showUpgrade = searchParams.get("upgrade") === "1";
   const [user, setUser] = useState<any>(null);
 
   useEffect(() => {
@@ -38,6 +48,28 @@ export default function Home() {
         {user ? (
           <>
             <span style={{ fontSize: 12, color: "#b89aab" }}>{user.email}</span>
+            <button onClick={async () => {
+              try {
+                const res = await fetch("/api/stripe/checkout", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ userId: user.id, email: user.email }),
+                });
+                const data = await res.json();
+                console.log("Stripe response:", data);
+                if (data.url) {
+                  window.location.href = data.url;
+                } else {
+                  alert("エラー: " + JSON.stringify(data));
+                }
+              } catch (e) {
+                console.error("Stripe error:", e);
+                alert("通信エラーが発生しました");
+              }
+            }}
+              style={{ fontSize: 11, padding: "5px 14px", borderRadius: 20, border: "none", background: "linear-gradient(135deg,#D4537E,#E07B2A)", color: "white", cursor: "pointer", fontWeight: 500 }}>
+              ✨ Premium
+            </button>
             <button onClick={handleLogout}
               style={{ fontSize: 11, padding: "5px 14px", borderRadius: 20, border: "0.5px solid #f0dde6", background: "white", color: "#b89aab", cursor: "pointer" }}>
               ログアウト
@@ -86,7 +118,7 @@ export default function Home() {
         <div className="card"
           onClick={() => router.push("/couple")}
           style={{ width: 220, background: "white", borderRadius: 24, border: "0.5px solid #f0dde6", padding: "32px 24px", cursor: "pointer", textAlign: "center", boxShadow: "0 4px 20px rgba(212,83,126,.08)", animationDelay: "0.1s" }}>
-          <div style={{ fontSize: 48, marginBottom: 16 }}>💑</div>
+          <div style={{ fontSize: 48, marginBottom: 16 }}>👫</div>
           <div style={{ fontSize: 10, background: "#FBEAF0", color: "#993556", borderRadius: 20, padding: "3px 10px", display: "inline-block", marginBottom: 8, fontWeight: 500 }}>有料</div>
           <h2 style={{ fontFamily: "'DM Serif Display', serif", fontSize: 18, color: "#3a2030", margin: "0 0 8px" }}>
             Couple
