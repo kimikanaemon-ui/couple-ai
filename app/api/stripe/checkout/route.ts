@@ -7,6 +7,10 @@ export async function POST(req: NextRequest) {
   try {
     const { userId, email } = await req.json();
 
+    console.log("STRIPE_PRICE_ID:", process.env.STRIPE_PRICE_ID);
+    console.log("NEXT_PUBLIC_APP_URL:", process.env.NEXT_PUBLIC_APP_URL);
+    console.log("userId:", userId, "email:", email);
+
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
       mode: "subscription",
@@ -23,8 +27,11 @@ export async function POST(req: NextRequest) {
     });
 
     return NextResponse.json({ url: session.url });
-  } catch (error) {
-    console.error(error);
-    return NextResponse.json({ error: "決済セッションの作成に失敗しました" }, { status: 500 });
+  } catch (error: any) {
+    console.error("Stripe error detail:", error?.message, error?.raw);
+    return NextResponse.json({
+      error: "決済セッションの作成に失敗しました",
+      detail: error?.message,
+    }, { status: 500 });
   }
 }

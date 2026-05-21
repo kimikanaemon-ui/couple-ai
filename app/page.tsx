@@ -60,7 +60,7 @@ function HomeInner() {
                 if (data.url) {
                   window.location.href = data.url;
                 } else {
-                  alert("エラー: " + JSON.stringify(data));
+                  alert("エラー: " + (data.detail || JSON.stringify(data)));
                 }
               } catch (e) {
                 console.error("Stripe error:", e);
