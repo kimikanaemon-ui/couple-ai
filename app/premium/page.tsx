@@ -14,7 +14,7 @@ export default function SuccessPage() {
         </p>
 
         <Link
-          href="/"
+          href="/premium"
           className="mt-8 inline-block rounded-2xl bg-black px-6 py-3 text-white"
         >
           カウンセリングを始める
