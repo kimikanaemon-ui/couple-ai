@@ -39,21 +39,6 @@ function ParentChildPageInner() {
   const preConflict = searchParams.get("conflict") || "";
 
   const [isPremium, setIsPremium] = useState<boolean | null>(null);
-
-  useEffect(() => {
-    const check = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.user) { router.push("/login"); return; }
-      // TODO: Stripe完全動作後に is_premium チェックを有効化
-      // const { data } = await supabase.from("profiles").select("is_premium").eq("id", session.user.id).single();
-      // if (!data?.is_premium) { router.push("/?upgrade=1"); return; }
-      setIsPremium(true);
-    };
-    check();
-  }, [router]);
-
-  if (isPremium === null) return <div style={{ minHeight:"100vh", background:"#FDF9F4", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"sans-serif", color:"#c4a882" }}>確認中…</div>;
-
   const [introCompleted, setIntroCompleted] = useState(false);
   const [childBackground, setChildBackground] = useState({
     age: "",
@@ -62,6 +47,15 @@ function ParentChildPageInner() {
     issue: "",
     parentView: "",
   });
+
+  useEffect(() => {
+    const check = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) { router.push("/login"); return; }
+      setIsPremium(true);
+    };
+    check();
+  }, [router]);
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);

@@ -39,21 +39,6 @@ function CouplePageInner() {
   const preConflict = searchParams.get("conflict") || "";
 
   const [isPremium, setIsPremium] = useState<boolean | null>(null);
-
-  useEffect(() => {
-    const check = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.user) { router.push("/login"); return; }
-      // TODO: Stripe完全動作後に is_premium チェックを有効化
-      // const { data } = await supabase.from("profiles").select("is_premium").eq("id", session.user.id).single();
-      // if (!data?.is_premium) { router.push("/?upgrade=1"); return; }
-      setIsPremium(true);
-    };
-    check();
-  }, [router]);
-
- 
-
   const [introCompleted, setIntroCompleted] = useState(false);
   const [introData, setIntroData] = useState({ userName: "", partnerName: "", relationship: "", issue: "", theme: preTheme });
   const [messages, setMessages] = useState<Message[]>([]);
@@ -71,6 +56,15 @@ function CouplePageInner() {
   const [showSessions, setShowSessions] = useState(false);
   const [sessionGoalReached, setSessionGoalReached] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const check = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) { router.push("/login"); return; }
+      setIsPremium(true);
+    };
+    check();
+  }, [router]);
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, loading]);
   useEffect(() => { const s = localStorage.getItem("couple-ai-sessions"); if (s) setSessions(JSON.parse(s)); }, []);
@@ -184,8 +178,6 @@ function CouplePageInner() {
       }
     } catch(e){ console.error(e); } finally { setLoading(false); }
   };
-  
-  if (isPremium === null) return <div style={{ minHeight:"100vh", background:"#FDF6F9", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"sans-serif", color:"#b89aab" }}>確認中…</div>;
 
   const cm = MOODS[mood];
   const ts: Record<string,{icon:string;bg:string;text:string;border:string}> = {
