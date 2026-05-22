@@ -142,9 +142,9 @@ function ParentChildPageInner() {
     if (!SR) { alert("このブラウザは音声入力に対応していません"); return; }
     const r = new SR();
     r.lang="ja-JP"; r.continuous=true; r.interimResults=true; r.maxAlternatives=1;
-    let committed = "";
+    let committed = ""; // 毎回新規スタート
     let silenceTimer: ReturnType<typeof setTimeout> | null = null;
-    r.onstart = () => { setListening(true); setInput(prev => { committed = prev; return prev; }); };
+    r.onstart = () => { setListening(true); setInput(""); };
     r.onresult = (e: any) => {
       let interim = "";
       for (let i = e.resultIndex; i < e.results.length; i++) {
