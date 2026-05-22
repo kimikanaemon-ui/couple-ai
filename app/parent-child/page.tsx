@@ -73,8 +73,33 @@ function ParentChildPageInner() {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, loading]);
-  useEffect(() => { const s = localStorage.getItem("family-ai-sessions"); if (s) setSessions(JSON.parse(s)); }, []);
+  useEffect(() => {
+    const s = localStorage.getItem("family-ai-sessions");
+    if (s) setSessions(JSON.parse(s));
+    // リロード時に最後のアクティブセッションを復元
+    const active = localStorage.getItem("family-ai-active");
+    if (active) {
+      try {
+        const { messages: m, speaker: sp, mood: mo, introCompleted: ic, childBackground: cb } = JSON.parse(active);
+        if (m?.length > 0) {
+          setMessages(m);
+          if (sp) setSpeaker(sp);
+          if (mo) setMood(mo);
+          if (cb) setChildBackground(cb);
+          if (ic) setIntroCompleted(true);
+        }
+      } catch {}
+    }
+  }, []);
+
   useEffect(() => { localStorage.setItem("family-ai-sessions", JSON.stringify(sessions)); }, [sessions]);
+
+  // メッセージが変わるたびに自動保存
+  useEffect(() => {
+    if (messages.length > 0) {
+      localStorage.setItem("family-ai-active", JSON.stringify({ messages, speaker, mood, introCompleted, childBackground }));
+    }
+  }, [messages, speaker, mood]);
 
   const detectMood = (msgs: Message[]): MoodKey => {
     const recent = msgs.slice(-4).map(m => m.content).join(" ");
@@ -285,7 +310,12 @@ function ParentChildPageInner() {
         </div>
         <div style={{width:"100%",height:"0.5px",background:"#f0e4d0"}}/>
         <button onClick={()=>setShowSessions(v=>!v)} style={{width:"100%",padding:"7px 0",borderRadius:20,border:"0.5px solid #f0e4d0",background:"white",fontSize:11,color:"#c4a882",cursor:"pointer"}}>履歴 {sessions.length>0&&`(${sessions.length})`}</button>
-        <button onClick={()=>{setMessages([]);setEmotionScores(null);setKeywords([]);setIssues([]);setSpeaker("parent");setMood("neutral");}} style={{width:"100%",padding:"7px 0",borderRadius:20,border:"none",background:cm.color,color:"white",fontSize:11,fontWeight:500,cursor:"pointer"}}>新規セッション</button>
+        <button onClick={()=>{
+          setMessages([]); setEmotionScores(null); setKeywords([]); setIssues([]);
+          setSpeaker("parent"); setMood("neutral");
+          setIntroCompleted(false);
+          localStorage.removeItem("family-ai-active");
+        }} style={{width:"100%",padding:"7px 0",borderRadius:20,border:"none",background:cm.color,color:"white",fontSize:11,fontWeight:500,cursor:"pointer"}}>新規セッション</button>
       </div>
 
       {/* 履歴 */}
@@ -294,7 +324,14 @@ function ParentChildPageInner() {
           <div style={{fontSize:11,color:"#c4a882",marginBottom:4}}>セッション履歴</div>
           {sessions.length===0&&<p style={{fontSize:12,color:"#d8cfc4"}}>まだ保存がありません</p>}
           {sessions.map(s=>(
-            <button key={s.id} onClick={()=>{setMessages(s.messages);if(s.emotions)setEmotionScores(s.emotions);setKeywords(s.keywords||[]);setIssues(s.issues||[]);setShowSessions(false);}}
+            <button key={s.id} onClick={()=>{
+              setMessages(s.messages);
+              if(s.emotions) setEmotionScores(s.emotions);
+              setKeywords(s.keywords||[]); setIssues(s.issues||[]);
+              setIntroCompleted(true);
+              setShowSessions(false);
+              localStorage.setItem("family-ai-active", JSON.stringify({ messages: s.messages, speaker, mood, introCompleted: true, childBackground }));
+            }}
               style={{textAlign:"left",padding:"10px 12px",borderRadius:12,border:"0.5px solid #f0e4d0",background:"white",cursor:"pointer",width:"100%"}}>
               <div style={{fontSize:10,color:"#c4a882"}}>{s.date}</div>
               {s.keywords&&s.keywords.length>0&&<div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:4}}>{s.keywords.slice(0,3).map((kw,i)=><span key={i} style={{background:"#FDE8C8",color:"#854F0B",fontSize:10,padding:"2px 8px",borderRadius:20}}>{kw}</span>)}</div>}

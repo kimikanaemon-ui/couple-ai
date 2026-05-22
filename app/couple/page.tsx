@@ -67,8 +67,33 @@ function CouplePageInner() {
   }, [router]);
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, loading]);
-  useEffect(() => { const s = localStorage.getItem("couple-ai-sessions"); if (s) setSessions(JSON.parse(s)); }, []);
+  useEffect(() => {
+    const s = localStorage.getItem("couple-ai-sessions");
+    if (s) setSessions(JSON.parse(s));
+    // リロード時に最後のアクティブセッションを復元
+    const active = localStorage.getItem("couple-ai-active");
+    if (active) {
+      try {
+        const { messages: m, introData: id, speaker: sp, mood: mo } = JSON.parse(active);
+        if (m?.length > 0) {
+          setMessages(m);
+          if (id) setIntroData(id);
+          if (sp) setSpeaker(sp);
+          if (mo) setMood(mo);
+          setIntroCompleted(true);
+        }
+      } catch {}
+    }
+  }, []);
+
   useEffect(() => { localStorage.setItem("couple-ai-sessions", JSON.stringify(sessions)); }, [sessions]);
+
+  // メッセージが変わるたびにアクティブセッションを自動保存
+  useEffect(() => {
+    if (messages.length > 0) {
+      localStorage.setItem("couple-ai-active", JSON.stringify({ messages, introData, speaker, mood }));
+    }
+  }, [messages, speaker, mood]);
 
   const detectMood = (msgs: Message[]): MoodKey => {
     const recent = msgs.slice(-4).map(m => m.content).join(" ");
@@ -269,7 +294,12 @@ function CouplePageInner() {
         </div>
         <div style={{width:"100%",height:"0.5px",background:"#f0dde6"}}/>
         <button onClick={()=>setShowSessions(v=>!v)} style={{width:"100%",padding:"7px 0",borderRadius:20,border:"0.5px solid #f0dde6",background:"white",fontSize:11,color:"#b89aab",cursor:"pointer"}}>履歴 {sessions.length>0&&`(${sessions.length})`}</button>
-        <button onClick={()=>{setMessages([]);setEmotionScores(null);setKeywords([]);setIssues([]);setSpeaker("user");setMood("neutral");setSessionGoalReached(false);}} style={{width:"100%",padding:"7px 0",borderRadius:20,border:"none",background:cm.color,color:"white",fontSize:11,fontWeight:500,cursor:"pointer"}}>新規セッション</button>
+        <button onClick={()=>{
+          setMessages([]); setEmotionScores(null); setKeywords([]); setIssues([]);
+          setSpeaker("user"); setMood("neutral"); setSessionGoalReached(false);
+          setIntroCompleted(false);
+          localStorage.removeItem("couple-ai-active");
+        }} style={{width:"100%",padding:"7px 0",borderRadius:20,border:"none",background:cm.color,color:"white",fontSize:11,fontWeight:500,cursor:"pointer"}}>新規セッション</button>
       </div>
 
       {/* 履歴 */}
@@ -278,7 +308,15 @@ function CouplePageInner() {
           <div style={{fontSize:11,color:"#b89aab",marginBottom:4}}>セッション履歴</div>
           {sessions.length===0&&<p style={{fontSize:12,color:"#d0c0cc"}}>まだ保存がありません</p>}
           {sessions.map(s=>(
-            <button key={s.id} onClick={()=>{setMessages(s.messages);if(s.emotions)setEmotionScores(s.emotions);setKeywords(s.keywords||[]);setIssues(s.issues||[]);setShowSessions(false);}}
+            <button key={s.id} onClick={()=>{
+              setMessages(s.messages);
+              if(s.emotions) setEmotionScores(s.emotions);
+              setKeywords(s.keywords||[]); setIssues(s.issues||[]);
+              setIntroCompleted(true);
+              setShowSessions(false);
+              // 続きから打てるようにアクティブセッションに保存
+              localStorage.setItem("couple-ai-active", JSON.stringify({ messages: s.messages, introData, speaker, mood }));
+            }}
               style={{textAlign:"left",padding:"10px 12px",borderRadius:12,border:"0.5px solid #f0dde6",background:"white",cursor:"pointer",width:"100%"}}>
               <div style={{fontSize:10,color:"#b89aab"}}>{s.date}</div>
               {s.keywords&&s.keywords.length>0&&<div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:4}}>{s.keywords.slice(0,3).map((kw,i)=><span key={i} style={{background:"#FBEAF0",color:"#993556",fontSize:10,padding:"2px 8px",borderRadius:20}}>{kw}</span>)}</div>}
