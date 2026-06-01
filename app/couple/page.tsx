@@ -130,17 +130,38 @@ function CouplePageInner() {
     });
   };
 
+// ============================================
+// couple/page.tsx と parent-child/page.tsx の
+// startListening 関数をこれに差し替える
+// useRef を imports に追加済みであること確認
+// ============================================
+
+  const recognitionRef = useRef<any>(null);
+
   const startListening = () => {
     if (isSpeaking) { window.speechSynthesis.cancel(); setIsSpeaking(false); }
+
+    // 既に動いていれば停止
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+      recognitionRef.current = null;
+      setListening(false);
+      return;
+    }
+
     const SR = (window as any).SpeechRecognition||(window as any).webkitSpeechRecognition;
     if (!SR) { alert("このブラウザは音声入力に対応していません"); return; }
     const r = new SR();
     r.lang="ja-JP"; r.continuous=true; r.interimResults=true; r.maxAlternatives=1;
-    let committed = ""; // 毎回新規スタート（前のテキストを引き継がない）
+    recognitionRef.current = r;
+
+    let committed = "";
     let silenceTimer: ReturnType<typeof setTimeout> | null = null;
+
     r.onstart = () => {
       setListening(true);
-      setInput(""); // 開始時に入力欄をクリア
+      setInput(""); // 必ず空からスタート
+      committed = "";
     };
     r.onresult = (e: any) => {
       let interim = "";
@@ -155,10 +176,11 @@ function CouplePageInner() {
     };
     r.onend = () => {
       setListening(false);
+      recognitionRef.current = null;
       if (silenceTimer) clearTimeout(silenceTimer);
       setInput(committed);
     };
-    r.onerror = () => setListening(false);
+    r.onerror = () => { setListening(false); recognitionRef.current = null; };
     window.speechSynthesis.cancel();
     setTimeout(() => r.start(), 300);
   };
