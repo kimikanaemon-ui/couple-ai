@@ -23,70 +23,9 @@ export default function FreePage() {
   const [result, setResult] = useState<TranslationResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [listening, setListening] = useState(false);
-  const recognitionRef = useRef<any>(null);
 
-const startListening = () => {
-  const SR =
-    (window as any).SpeechRecognition ||
-    (window as any).webkitSpeechRecognition;
 
-  if (!SR) {
-    alert("このブラウザは音声入力に対応していません");
-    return;
-  }
 
-  // すでに録音中なら停止
-  if (recognitionRef.current) {
-    recognitionRef.current.stop();
-    recognitionRef.current = null;
-    setListening(false);
-    return;
-  }
-
-  const recognition = new SR();
-
-  recognition.lang = "ja-JP";
-  recognition.interimResults = true;
-  recognition.continuous = true;
-
-  recognitionRef.current = recognition;
-
-  let finalTranscript = input;
-
-  recognition.onstart = () => {
-    setListening(true);
-  };
-
-  recognition.onresult = (event: any) => {
-    let interimTranscript = "";
-
-    for (let i = event.resultIndex; i < event.results.length; i++) {
-      const transcript = event.results[i][0].transcript;
-
-      if (event.results[i].isFinal) {
-        finalTranscript += transcript;
-      } else {
-        interimTranscript += transcript;
-      }
-    }
-
-    setInput(finalTranscript + interimTranscript);
-  };
-
-  recognition.onerror = (event: any) => {
-    console.error(event.error);
-    setListening(false);
-    recognitionRef.current = null;
-  };
-
-  recognition.onend = () => {
-    setListening(false);
-    recognitionRef.current = null;
-    setInput(finalTranscript);
-  };
-
-  recognition.start();
-};
   const [mode, setMode] = useState<"couple" | "family">("couple");
   const recognitionRef = useRef<any>(null);
 
