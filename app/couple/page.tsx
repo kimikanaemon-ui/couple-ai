@@ -187,6 +187,11 @@ function CouplePageInner() {
 
   const sendMessage = async () => {
     if (!input.trim() || loading) return;
+  if (recognitionRef.current) {
+    recognitionRef.current.stop();
+    recognitionRef.current = null;
+    setListening(false);
+  }
     const newMessages: Message[] = [...messages, { role: speaker, content: input }];
     setMessages(newMessages); setInput("");
     setInterventionType(null); setMood(detectMood(newMessages));
