@@ -61,7 +61,7 @@ ISSUES_JSON:["争点1","争点2"]`,
     const humanMessages = messages.filter((m: any) => m.role !== "assistant");
     const assistantMessages = messages.filter((m: any) => m.role === "assistant");
     const humanCount = humanMessages.length;
-    const assistantCount = assistantMessages.length;
+  
 
     // 会話ステージ
     const conversationStage =
@@ -285,6 +285,7 @@ ISSUES_JSON:["争点1","争点2"]`,
 
 現実的な一歩を提案する。
 `,
+};
 
     // モラハラ・抑圧検知時の特別プロンプト
     const specialNote = hasMoralHarass ? `
