@@ -10,7 +10,7 @@ export async function POST(req: Request) {
     const { userDump, partnerDump } = body;
 
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: "gpt-4o",
       temperature: 0.7,
 
       messages: [

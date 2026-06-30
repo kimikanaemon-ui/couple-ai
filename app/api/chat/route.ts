@@ -28,7 +28,7 @@ export async function POST(req: Request) {
 
     if (isEndSession) {
       const completion = await openai.chat.completions.create({
-        model: "gpt-4o-mini",
+        model: "gpt-4o",
         messages: [
           {
             role: "system",
@@ -64,15 +64,7 @@ ISSUES_JSON:["争点1","争点2"]`,
 
     const conversationStage = humanCount < 6 ? "listen" : humanCount < 12 ? "analyze" : "resolve";
 
-    if (conversationStage === "listen") {
-      const lastAIIndex = messages.map((m: any) => m.role).lastIndexOf("assistant");
-      const sinceLastAI = lastAIIndex === -1
-        ? humanCount
-        : messages.slice(lastAIIndex + 1).filter((m: any) => m.role !== "assistant").length;
-      if (sinceLastAI < 3) {
-        return Response.json({ shouldIntervene: false, interventionType: "none", reply: null });
-      }
-    }
+
 
     if (humanCount < 2) {
       return Response.json({ shouldIntervene: false, interventionType: "none", reply: null });
@@ -166,7 +158,7 @@ ${preConflict ? `【事前把握】${preConflict}` : ""}
 {"type":"facilitate","comment":"自然な一言","nextSpeaker":"partner"}`;
 
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: "gpt-4o",
       messages: [
         { role: "system", content: systemContent },
         ...messages.map((m: any) => ({

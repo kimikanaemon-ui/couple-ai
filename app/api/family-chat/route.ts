@@ -25,7 +25,7 @@ export async function POST(req: Request) {
 
     if (isEndSession) {
       const completion = await openai.chat.completions.create({
-        model: "gpt-4o-mini",
+        model: "gpt-4o",
         messages: [
           {
             role: "system",
@@ -73,7 +73,7 @@ ISSUES_JSON:["争点1","争点2"]`,
     const childCount = humanMessages.filter((m: any) => m.role === "child").length;
 
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: "gpt-4o",
       messages: [
         {
           role: "system",
